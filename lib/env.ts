@@ -14,6 +14,30 @@ export const env = {
   appPassword: process.env.APP_PASSWORD ?? '',
   authSecret: process.env.AUTH_SECRET ?? '',
 
+  /** Qual provedor escreve os roteiros. Os quatro primeiros sao gratuitos. */
+  aiProvider: (process.env.AI_PROVIDER as
+    | 'gemini'
+    | 'groq'
+    | 'openrouter'
+    | 'ollama'
+    | 'anthropic') || 'gemini',
+
+  geminiApiKey: process.env.GEMINI_API_KEY ?? '',
+  geminiModel: process.env.GEMINI_MODEL || 'gemini-2.5-flash',
+  /** Trocavel para apontar a um gateway/proxy — e para os testes. */
+  geminiBaseUrl: (
+    process.env.GEMINI_BASE_URL || 'https://generativelanguage.googleapis.com/v1beta'
+  ).replace(/\/$/, ''),
+
+  groqApiKey: process.env.GROQ_API_KEY ?? '',
+  groqModel: process.env.GROQ_MODEL || 'llama-3.3-70b-versatile',
+
+  openRouterApiKey: process.env.OPENROUTER_API_KEY ?? '',
+  openRouterModel: process.env.OPENROUTER_MODEL || 'meta-llama/llama-3.3-70b-instruct:free',
+
+  ollamaUrl: (process.env.OLLAMA_URL || 'http://localhost:11434').replace(/\/$/, ''),
+  ollamaModel: process.env.OLLAMA_MODEL || 'llama3.1:8b',
+
   anthropicApiKey: process.env.ANTHROPIC_API_KEY ?? '',
   anthropicModel: process.env.ANTHROPIC_MODEL || 'claude-opus-5',
 
@@ -55,11 +79,36 @@ export function requireEnv<K extends keyof typeof env>(...keys: K[]): void {
   }
 }
 
+/**
+ * Se o provedor de IA escolhido tem o que precisa para rodar.
+ *
+ * Vive aqui (e nao em lib/ai/providers) para a tela de configuracoes poder
+ * checar sem importar o modulo de IA inteiro — e para nao criar um ciclo,
+ * ja que providers.ts le daqui.
+ */
+export function aiIsReady(): boolean {
+  switch (env.aiProvider) {
+    case 'gemini':
+      return Boolean(env.geminiApiKey);
+    case 'groq':
+      return Boolean(env.groqApiKey);
+    case 'openrouter':
+      return Boolean(env.openRouterApiKey);
+    case 'ollama':
+      // Nao ha chave para conferir; a falha so aparece na primeira chamada.
+      return Boolean(env.ollamaUrl && env.ollamaModel);
+    case 'anthropic':
+      return Boolean(env.anthropicApiKey);
+    default:
+      return false;
+  }
+}
+
 /** Quais integracoes estao prontas — usado pela tela de configuracoes. */
 export function integrationStatus() {
   return {
     database: Boolean(env.databaseUrl),
-    ia: Boolean(env.anthropicApiKey),
+    ia: aiIsReady(),
     tiktok: Boolean(env.tiktokClientKey && env.tiktokClientSecret && env.tiktokRedirectUri),
     storage: env.storageDriver === 'local' || Boolean(env.s3Bucket && env.s3AccessKeyId && env.s3SecretAccessKey),
     stock: Boolean(env.pexelsApiKey),

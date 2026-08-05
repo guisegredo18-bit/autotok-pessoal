@@ -1,49 +1,40 @@
-import Anthropic from '@anthropic-ai/sdk';
-import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod';
 import { z } from 'zod';
-import { env, requireEnv } from '@/lib/env';
 import type { AppSettings } from '@/lib/db/settings';
 import { COMMON_RULES, TEMPLATES, contextBlock, type TemplateName } from './templates';
+import { getProvider } from './providers';
+import { InvalidJsonError, parseJson } from './json';
 
 /**
- * Geracao de roteiro com a API da Anthropic.
+ * Geracao de roteiro.
  *
- * Usamos structured outputs (output_config.format) em vez de pedir "responda em
- * JSON" no prompt: o modelo fica obrigado a devolver exatamente este schema, o
- * que elimina a classe inteira de bugs de parsing que apareceria rodando isso
- * varias vezes por dia sem ninguem olhando.
+ * O modelo devolve JSON e nos validamos contra um schema Zod. Manter a
+ * validacao do nosso lado (em vez de depender do modo estruturado de cada API)
+ * e o que permite trocar entre Gemini, Groq, OpenRouter, Ollama e Anthropic
+ * sem reescrever nada aqui — e os provedores gratuitos nao oferecem esse modo
+ * com a mesma garantia.
  */
 
 const SceneSchema = z.object({
-  text: z.string().describe('Texto que sera narrado nesta cena, em portugues do Brasil'),
-  visual: z.string().describe('Termo de busca em ingles para a imagem/video de fundo'),
-  seconds: z.number().describe('Duracao estimada da cena em segundos'),
+  text: z.string(),
+  visual: z.string(),
+  seconds: z.number(),
 });
 
 const IdeaSchema = z.object({
-  title: z.string().describe('Titulo interno da ideia, so para voce identificar no painel'),
-  hook: z.string().describe('A primeira frase do video, a que prende a atencao'),
-  scenes: z.array(SceneSchema).describe('As cenas do video, na ordem'),
-  caption: z.string().describe('Legenda do post, ate 150 caracteres, sem hashtags'),
-  hashtags: z.array(z.string()).describe('Hashtags sem o simbolo #'),
-  score: z
-    .number()
-    .describe('Sua nota honesta de 0 a 100 para o potencial deste video de viralizar'),
-  reasoning: z.string().describe('Uma frase explicando a nota que voce deu'),
+  title: z.string(),
+  hook: z.string(),
+  scenes: z.array(SceneSchema).min(1),
+  caption: z.string(),
+  hashtags: z.array(z.string()),
+  score: z.number(),
+  reasoning: z.string(),
 });
 
 const BatchSchema = z.object({
-  ideas: z.array(IdeaSchema),
+  ideas: z.array(IdeaSchema).min(1),
 });
 
 export type GeneratedIdea = z.infer<typeof IdeaSchema>;
-
-let client: Anthropic | null = null;
-function getClient(): Anthropic {
-  requireEnv('anthropicApiKey');
-  client ??= new Anthropic({ apiKey: env.anthropicApiKey });
-  return client;
-}
 
 const SYSTEM = `
 Voce e um roteirista de videos curtos para TikTok, especialista no mercado brasileiro.
@@ -54,6 +45,35 @@ falada, zero formalidade.
 Voce e honesto na nota que da para as proprias ideias. Uma ideia mediana recebe
 nota mediana — quem le essa nota usa ela para decidir se grava o video ou nao,
 entao inflar a nota so faz a pessoa perder tempo gravando conteudo ruim.
+
+Responda SEMPRE com um unico objeto JSON valido, sem texto antes ou depois e sem
+blocos de codigo.
+`.trim();
+
+/**
+ * O formato esperado, escrito no proprio prompt.
+ *
+ * Descrito a mao em vez de gerado a partir do Zod: um JSON Schema cru gasta
+ * muito mais tokens e os modelos menores seguem pior do que um exemplo curto
+ * e comentado.
+ */
+const SHAPE = `
+FORMATO DA RESPOSTA (JSON, exatamente estas chaves):
+{
+  "ideas": [
+    {
+      "title": "titulo interno curto",
+      "hook": "a primeira frase do video",
+      "scenes": [
+        { "text": "texto narrado da cena", "visual": "english search term", "seconds": 4 }
+      ],
+      "caption": "legenda do post, ate 150 caracteres, sem hashtags",
+      "hashtags": ["semcerquilha", "outra"],
+      "score": 78,
+      "reasoning": "uma frase explicando a nota"
+    }
+  ]
+}
 `.trim();
 
 export type GenerateOptions = {
@@ -68,6 +88,7 @@ export type GenerateOptions = {
 export async function generateIdeas(opts: GenerateOptions): Promise<GeneratedIdea[]> {
   const template = TEMPLATES[opts.template] ?? TEMPLATES.viral;
   const [minScenes, maxScenes] = template.scenes;
+  const provider = getProvider();
 
   const prompt = `
 ${contextBlock(opts.settings, opts.trendName, opts.trendKind)}
@@ -76,44 +97,76 @@ ${template.structure}
 
 ${COMMON_RULES}
 
+${SHAPE}
+
 Gere ${opts.count} ideia(s) de video DIFERENTES entre si — angulos distintos, nao
 variacoes da mesma frase. Cada uma com ${minScenes} a ${maxScenes} cenas, somando
 aproximadamente ${opts.settings.targetDuration} segundos no total.
 `.trim();
 
-  const response = await getClient().messages.parse({
-    model: env.anthropicModel,
-    max_tokens: 16000,
-    system: SYSTEM,
-    messages: [{ role: 'user', content: prompt }],
-    output_config: { format: zodOutputFormat(BatchSchema) },
-  });
+  let lastError: unknown;
 
-  const parsed = response.parsed_output;
-  if (!parsed) {
-    throw new Error('A IA nao devolveu um roteiro valido. Tente novamente.');
+  // Duas tentativas: na segunda, o proprio erro de validacao entra no prompt.
+  // Modelos gratuitos costumam acertar quando voce diz exatamente o que ficou
+  // errado, e isso sai bem mais barato que exigir um provedor pago.
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const text = await provider.complete({
+      system: SYSTEM,
+      prompt:
+        attempt === 0
+          ? prompt
+          : `${prompt}\n\nSua resposta anterior foi rejeitada: ${
+              lastError instanceof Error ? lastError.message : lastError
+            }\nResponda de novo, apenas com o JSON valido.`,
+      maxTokens: 8000,
+    });
+
+    try {
+      const parsed = parseJson(text, BatchSchema);
+      return parsed.ideas.map(normalizeIdea);
+    } catch (err) {
+      if (!(err instanceof InvalidJsonError)) throw err;
+      lastError = err;
+    }
   }
-  return parsed.ideas.map(normalizeIdea);
+
+  throw new Error(
+    `O modelo (${provider.label}) nao devolveu um roteiro valido em duas tentativas. ` +
+      `Ultimo erro: ${lastError instanceof Error ? lastError.message : lastError}`,
+  );
 }
 
 /**
  * Ajustes que preferimos garantir no codigo em vez de confiar no modelo:
  * hashtags sem `#`, legenda dentro do limite e cenas com duracao sensata.
  */
-function normalizeIdea(idea: GeneratedIdea): GeneratedIdea {
+export function normalizeIdea(idea: GeneratedIdea): GeneratedIdea {
   return {
     ...idea,
     caption: idea.caption.slice(0, 150).trim(),
     hashtags: idea.hashtags
-      .map((h) => h.replace(/^#/, '').replace(/\s+/g, '').toLowerCase())
+      .map((h) => String(h).replace(/^#/, '').replace(/\s+/g, '').toLowerCase())
       .filter((h) => h.length > 1)
       .slice(0, 8),
     scenes: idea.scenes
       .filter((s) => s.text.trim().length > 0)
-      // Menos de 1,5s ninguem le a legenda; mais de 10s cansa em video curto.
-      .map((s) => ({ ...s, seconds: Math.min(10, Math.max(1.5, s.seconds || 4)) })),
+      .map((s) => ({ ...s, seconds: normalizeSeconds(s.seconds) })),
     score: Math.max(0, Math.min(100, idea.score)),
   };
+}
+
+/**
+ * Duracao estimada de uma cena.
+ *
+ * Vale lembrar que este numero e so estimativa exibida no painel: na hora de
+ * renderizar, cada cena dura o tempo real da narracao. Por isso ha duas regras
+ * distintas — valor ausente (0, NaN, negativo) vira o padrao de 4s, e valor
+ * informado mas absurdo e trazido para dentro da faixa util.
+ */
+export function normalizeSeconds(seconds: number): number {
+  if (!Number.isFinite(seconds) || seconds <= 0) return 4;
+  // Menos de 1,5s ninguem le a legenda; mais de 10s cansa em video curto.
+  return Math.min(10, Math.max(1.5, seconds));
 }
 
 /** Monta a legenda final do post (legenda + assinatura + hashtags). */

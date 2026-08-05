@@ -90,11 +90,40 @@ Crie um bucket no [Cloudflare R2](https://developers.cloudflare.com/r2/):
 Preencha `S3_ENDPOINT`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`
 e `S3_PUBLIC_URL`.
 
-### 3. Chave da IA
+### 3. IA que escreve os roteiros (grátis)
 
-Crie uma chave em [console.anthropic.com](https://console.anthropic.com) →
-`ANTHROPIC_API_KEY`. O padrão é `claude-opus-5`; se for gerar muitos vídeos por
-dia, `claude-sonnet-5` sai bem mais barato e ainda escreve roteiro bom.
+Escolha **um** provedor em `AI_PROVIDER`. Os quatro primeiros são gratuitos:
+
+| `AI_PROVIDER` | Como obter | Limite grátis | Precisa de cartão? |
+|---|---|---|---|
+| `gemini` **(padrão)** | [aistudio.google.com/apikey](https://aistudio.google.com/apikey) | ~250 pedidos/dia no 2.5 Flash | Não |
+| `groq` | [console.groq.com/keys](https://console.groq.com/keys) | ~1.000 pedidos/dia no Llama 3.3 70B | Não |
+| `openrouter` | [openrouter.ai](https://openrouter.ai) — modelos com `:free` | varia por modelo | Não |
+| `ollama` | modelo local, nenhuma chave | ilimitado | Não |
+| `anthropic` | [console.anthropic.com](https://console.anthropic.com) | — | Sim, **cobra por uso** |
+
+Esta aplicação faz cerca de **15 chamadas por dia** (5 ideias × 3 rodadas), então
+qualquer um dos gratuitos cobre com folga.
+
+**Gemini é o padrão** por dois motivos: é o que escreve melhor em português
+entre os gratuitos, e o free tier não pede cartão de crédito.
+
+```env
+AI_PROVIDER=gemini
+GEMINI_API_KEY=sua-chave-aqui
+```
+
+> **Honestidade sobre qualidade:** os modelos gratuitos escrevem roteiros bons,
+> mas seguem instrução de formato pior que os pagos. O código trata isso —
+> valida o JSON e, se vier torto, refaz o pedido dizendo exatamente o que estava
+> errado. Na prática você não vê diferença; se quiser o teto de qualidade,
+> `AI_PROVIDER=anthropic` continua disponível e é a única opção que gera custo.
+
+> **Ollama (zero chave, zero limite):** se você já tem um VPS ou deixa o
+> computador ligado, instale o [Ollama](https://ollama.com), rode
+> `ollama pull llama3.1:8b` e use `AI_PROVIDER=ollama`. Nada sai da sua máquina.
+> Só não funciona com o render no GitHub Actions, porque o runner não enxerga o
+> seu Ollama — nesse caso rode o render pelo VPS (`npm run queue`).
 
 ### 4. Banco de imagens (grátis)
 
@@ -157,13 +186,16 @@ npm run db:push
 
 No repositório, em **Settings → Secrets and variables → Actions**, cadastre:
 
-**Secrets:** `DATABASE_URL`, `ANTHROPIC_API_KEY`, `PEXELS_API_KEY`,
-`S3_ENDPOINT`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`,
-`S3_PUBLIC_URL`, `TIKTOK_CLIENT_KEY`, `TIKTOK_CLIENT_SECRET`,
-`TIKTOK_REDIRECT_URI`, `NTFY_TOPIC`
+**Secrets:** `DATABASE_URL`, `GEMINI_API_KEY` (ou a chave do provedor que você
+escolheu), `PEXELS_API_KEY`, `S3_ENDPOINT`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`,
+`S3_SECRET_ACCESS_KEY`, `S3_PUBLIC_URL`, `TIKTOK_CLIENT_KEY`,
+`TIKTOK_CLIENT_SECRET`, `TIKTOK_REDIRECT_URI`, `NTFY_TOPIC`
 
-**Variables:** `APP_URL`, `TREND_COUNTRY` (BR), `TREND_LANGUAGE` (pt-BR),
-`S3_REGION` (auto), `TTS_PROVIDER` (edge), `TTS_VOICE`, `ANTHROPIC_MODEL`
+**Variables:** `AI_PROVIDER` (gemini), `APP_URL`, `TREND_COUNTRY` (BR),
+`TREND_LANGUAGE` (pt-BR), `S3_REGION` (auto), `TTS_PROVIDER` (edge), `TTS_VOICE`
+
+> Só o provedor escolhido precisa de chave — os outros secrets podem ficar
+> vazios sem quebrar nada.
 
 Depois crie um token clássico em **GitHub → Settings → Developer settings →
 Personal access tokens (classic)** com o escopo `repo`, e coloque em
@@ -240,19 +272,28 @@ Renderizar localmente exige **ffmpeg**:
 
 ---
 
-## Custo mensal estimado
+## Custo mensal
 
-| Item | Custo |
-|---|---|
-| Neon (Postgres) | grátis |
-| Cloudflare R2 (10 GB) | grátis |
-| Pexels | grátis |
-| Edge TTS (narração) | grátis |
-| GitHub Actions (repo público) | grátis |
-| Vercel (hobby) | grátis |
-| API da Anthropic | ~US$ 0,05–0,30 por vídeo, conforme o modelo |
+**Zero, na configuração padrão.** Nenhum item abaixo pede cartão de crédito.
 
-Com `claude-sonnet-5` e 3 vídeos por dia, fica na casa de poucos dólares por mês.
+| Item | Plano grátis | Uso estimado (3 vídeos/dia) |
+|---|---|---|
+| Neon (Postgres) | 0,5 GB | alguns MB |
+| Cloudflare R2 | 10 GB | ~1 GB/mês (apague os antigos de vez em quando) |
+| Pexels | ilimitado com limite por hora | ~20 buscas/dia |
+| Edge TTS (narração) | sem chave, sem limite publicado | ~15 min de áudio/dia |
+| Google Gemini | ~250 pedidos/dia | ~15 pedidos/dia |
+| GitHub Actions (repo privado) | 2.000 min/mês | ~360 min/mês |
+| Vercel (hobby) | — | painel, tráfego mínimo |
+
+O item mais apertado é o GitHub Actions: cada render leva 2–4 minutos, então os
+2.000 minutos cobrem cerca de **15 vídeos por dia**. Se um dia isso apertar,
+tornar o repositório público zera esse limite (Actions é ilimitado em repos
+públicos) — mas aí lembre que seus workflows ficam visíveis; **os secrets
+continuam privados de qualquer forma**.
+
+Trocar para `AI_PROVIDER=anthropic` é a única mudança que gera custo
+(~US$ 0,05–0,30 por vídeo).
 
 ---
 
@@ -265,7 +306,8 @@ app/                  painel PWA (Next.js App Router)
   actions.ts          server actions do painel
 lib/
   trends/             coleta e pontuação das tendências
-  ai/                 prompts e geração de roteiro
+  ai/                 prompts, provedores (Gemini/Groq/OpenRouter/Ollama/Claude)
+                      e o tratamento de JSON dos modelos
   video/              FFmpeg, legendas, render
   tts/                narração (Edge grátis ou ElevenLabs)
   tiktok/             OAuth e Content Posting API
@@ -299,3 +341,10 @@ TikTok. Ver a seção "O que você precisa saber".
 
 **"A autorização do TikTok expirou"** — o refresh token dura 365 dias. Vá em
 Configurações e reconecte.
+
+**"O modelo não devolveu um roteiro válido em duas tentativas"** — acontece com
+modelos gratuitos menores. Troque `AI_PROVIDER` (gemini e groq são os mais
+consistentes) ou use um modelo maior no mesmo provedor.
+
+**Estourou o limite diário do provedor de IA** — troque `AI_PROVIDER` para outro
+gratuito; as chaves convivem no mesmo `.env`, é só mudar uma linha.

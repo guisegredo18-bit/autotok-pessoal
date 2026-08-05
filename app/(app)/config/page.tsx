@@ -1,5 +1,6 @@
 import { getSettings } from '@/lib/db/settings';
 import { integrationStatus, env } from '@/lib/env';
+import { PROVIDER_LABELS, activeModel } from '@/lib/ai/providers';
 import { getAccount } from '@/lib/tiktok/account';
 import { ActionButton } from '@/components/action-button';
 import { SettingsForm } from '@/components/settings-form';
@@ -10,7 +11,7 @@ export const dynamic = 'force-dynamic';
 
 const CHECKS: { key: keyof ReturnType<typeof integrationStatus>; label: string; hint: string }[] = [
   { key: 'database', label: 'Banco de dados', hint: 'DATABASE_URL' },
-  { key: 'ia', label: 'IA (roteiros)', hint: 'ANTHROPIC_API_KEY' },
+  { key: 'ia', label: 'IA (roteiros)', hint: 'AI_PROVIDER + a chave do provedor' },
   { key: 'tiktok', label: 'App do TikTok', hint: 'TIKTOK_CLIENT_KEY / SECRET / REDIRECT_URI' },
   { key: 'storage', label: 'Armazenamento', hint: 'S3_* (obrigatorio com GitHub Actions)' },
   { key: 'stock', label: 'Banco de imagens', hint: 'PEXELS_API_KEY' },
@@ -110,9 +111,15 @@ export default async function ConfigPage() {
           ))}
         </ul>
         <p className="mt-2 px-1 text-[12px] leading-snug text-muted">
-          Modelo de IA: {env.anthropicModel} · Armazenamento: {env.storageDriver} ·
-          Narracao: {env.ttsProvider}
+          IA: {PROVIDER_LABELS[env.aiProvider] ?? env.aiProvider} ({activeModel()}) ·
+          Armazenamento: {env.storageDriver} · Narracao: {env.ttsProvider}
         </p>
+        {env.aiProvider === 'anthropic' && (
+          <p className="mt-1 px-1 text-[12px] leading-snug text-amber-400">
+            Este provedor cobra por uso. Para custo zero, mude AI_PROVIDER para
+            gemini, groq, openrouter ou ollama.
+          </p>
+        )}
       </section>
 
       <form action={logoutAction}>
