@@ -6,6 +6,7 @@ import { buildCaption } from '@/lib/ai/script';
 import { renderVideo } from '@/lib/video/render';
 import { putFile } from '@/lib/storage';
 import { push } from '@/lib/notify';
+import { withJob } from '@/lib/db/jobs';
 import { env } from '@/lib/env';
 
 /** Coloca uma ideia aprovada na fila de renderizacao. */
@@ -37,6 +38,10 @@ export async function enqueueRender(ideaId: string): Promise<string> {
  * request HTTP por timeout.
  */
 export async function renderQueuedVideo(videoId: string): Promise<void> {
+  return withJob('render', videoId, (log) => renderInner(videoId, log));
+}
+
+async function renderInner(videoId: string, log: (message: string) => void): Promise<void> {
   const [video] = await db.select().from(videos).where(eq(videos.id, videoId)).limit(1);
   if (!video) throw new Error(`Video ${videoId} nao encontrado.`);
   if (!video.ideaId) throw new Error(`Video ${videoId} nao tem roteiro associado.`);
@@ -47,7 +52,10 @@ export async function renderQueuedVideo(videoId: string): Promise<void> {
   await db.update(videos).set({ status: 'rendering', error: null }).where(eq(videos.id, videoId));
 
   try {
-    const result = await renderVideo(idea.scenes as Scene[], (msg) => console.log(`  ${msg}`));
+    const result = await renderVideo(idea.scenes as Scene[], (msg) => {
+      console.log(`  ${msg}`);
+      log(msg);
+    });
 
     const stamp = Date.now();
     const [stored, thumb] = await Promise.all([
@@ -60,7 +68,9 @@ export async function renderQueuedVideo(videoId: string): Promise<void> {
       .set({
         status: 'ready',
         videoUrl: stored.url,
+        videoKey: stored.key,
         thumbUrl: thumb.url,
+        thumbKey: thumb.key,
         durationSeconds: result.durationSeconds,
         sizeBytes: stored.size,
         renderedAt: new Date(),

@@ -3,6 +3,7 @@ import { ideas } from '@/lib/db/schema';
 import { getSettings } from '@/lib/db/settings';
 import { topTrends } from '@/lib/trends/scan';
 import { generateIdeas } from '@/lib/ai/script';
+import { withJob } from '@/lib/db/jobs';
 import type { TemplateName } from '@/lib/ai/templates';
 
 export type IdeaBatchResult = {
@@ -23,6 +24,13 @@ export async function generateIdeasFromTrends(options?: {
   count?: number;
   template?: TemplateName;
 }): Promise<IdeaBatchResult> {
+  return withJob('ideas', undefined, (log) => fromTrends(log, options));
+}
+
+async function fromTrends(
+  log: (message: string) => void,
+  options?: { count?: number; template?: TemplateName },
+): Promise<IdeaBatchResult> {
   const settings = await getSettings();
   const count = options?.count ?? settings.ideasPerScan;
   const template = options?.template ?? settings.template;
@@ -39,6 +47,7 @@ export async function generateIdeasFromTrends(options?: {
   const trendsUsed: string[] = [];
 
   for (const trend of trends) {
+    log(`escrevendo roteiro para "${trend.name}"`);
     const generated = await generateIdeas({
       settings,
       template,

@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { ideas, trends, videos } from '@/lib/db/schema';
+import { ideas, jobs, trends, videos } from '@/lib/db/schema';
 import { getSettings } from '@/lib/db/settings';
 import { integrationStatus } from '@/lib/env';
 import { getAccount } from '@/lib/tiktok/account';
@@ -29,11 +29,12 @@ async function counts() {
 }
 
 export default async function Dashboard() {
-  const [stats, settings, account, recent] = await Promise.all([
+  const [stats, settings, account, recent, runs] = await Promise.all([
     counts(),
     getSettings(),
     getAccount().catch(() => null),
     db.select().from(videos).orderBy(sql`${videos.createdAt} desc`).limit(4),
+    db.select().from(jobs).orderBy(sql`${jobs.startedAt} desc`).limit(5),
   ]);
 
   const status = integrationStatus();
@@ -134,9 +135,55 @@ export default async function Dashboard() {
           </ul>
         )}
       </section>
+
+      {/* Os jobs pesados rodam no GitHub Actions, longe daqui. Quando um video
+          nao aparece, esta lista responde "chegou a rodar?" sem precisar abrir
+          a aba de Actions no celular. */}
+      {runs.length > 0 && (
+        <section className="mt-6">
+          <h2 className="mb-2 text-[13px] font-semibold uppercase tracking-wide text-muted">
+            Ultimas execucoes
+          </h2>
+          <ul className="card flex flex-col divide-y divide-line">
+            {runs.map((run) => (
+              <li key={run.id} className="py-2.5 first:pt-0 last:pb-0">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-[14px]">{JOB_LABELS[run.type] ?? run.type}</p>
+                  <span
+                    className={`text-[12px] ${
+                      run.status === 'failed'
+                        ? 'text-red-400'
+                        : run.status === 'running'
+                          ? 'text-amber-400'
+                          : 'text-emerald-400'
+                    }`}
+                  >
+                    {run.status === 'running'
+                      ? 'rodando'
+                      : run.status === 'failed'
+                        ? 'falhou'
+                        : 'ok'}{' '}
+                    · ha {timeAgo(run.startedAt)}
+                  </span>
+                </div>
+                {run.status === 'failed' && run.message && (
+                  <p className="mt-1 text-[12px] leading-snug text-red-300">{run.message}</p>
+                )}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
     </>
   );
 }
+
+const JOB_LABELS: Record<string, string> = {
+  scan: 'Busca de tendencias',
+  ideas: 'Geracao de ideias',
+  render: 'Renderizacao de video',
+  publish: 'Publicacao no TikTok',
+};
 
 function Stat({
   label,

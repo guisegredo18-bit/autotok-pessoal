@@ -7,7 +7,7 @@ import { db } from '@/lib/db';
 import { ideas, videos } from '@/lib/db/schema';
 import { saveSettings, type AppSettings } from '@/lib/db/settings';
 import { login, logout, requireAuth } from '@/lib/auth';
-import { scanTrends } from '@/lib/trends/scan';
+import { runScan } from '@/lib/pipeline/trends';
 import { generateIdeasFromTrends, generateIdeasForTopic } from '@/lib/pipeline/ideas';
 import { enqueueRender, renderQueuedVideo } from '@/lib/pipeline/render';
 import { publishVideo } from '@/lib/pipeline/publish';
@@ -54,7 +54,7 @@ export async function logoutAction(): Promise<void> {
 export async function scanAction(): Promise<ActionState> {
   try {
     await guard();
-    const result = await scanTrends({ country: env.trendCountry, period: 7, limit: 30 });
+    const result = await runScan();
     revalidatePath('/tendencias');
     revalidatePath('/');
 
@@ -161,6 +161,41 @@ export async function publishVideoAction(videoId: string): Promise<ActionState> 
         ? 'Enviado como PRIVADO (app ainda nao auditado pelo TikTok). Abra o TikTok e mude a privacidade.'
         : 'Publicado no TikTok.',
     };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+/**
+ * Ajusta a legenda antes de publicar.
+ *
+ * O texto guardado aqui e exatamente o que vai como titulo do post no TikTok,
+ * hashtags inclusas — entao voce edita o que voce ve, sem surpresa depois.
+ */
+export async function updateCaptionAction(
+  videoId: string,
+  _prev: ActionState,
+  form: FormData,
+): Promise<ActionState> {
+  try {
+    await guard();
+    const caption = String(form.get('caption') ?? '').trim();
+    if (!caption) return { ok: false, message: 'A legenda nao pode ficar vazia.' };
+
+    // O limite do TikTok e 2200 caracteres; cortar aqui evita que o post
+    // inteiro seja recusado por causa de texto longo.
+    const trimmed = caption.slice(0, 2200);
+    const hashtags = Array.from(trimmed.matchAll(/#([\p{L}\p{N}_]+)/gu)).map((m) =>
+      m[1].toLowerCase(),
+    );
+
+    await db
+      .update(videos)
+      .set({ caption: trimmed, hashtags })
+      .where(eq(videos.id, videoId));
+
+    revalidatePath('/fila');
+    return { ok: true, message: 'Legenda atualizada.' };
   } catch (err) {
     return fail(err);
   }

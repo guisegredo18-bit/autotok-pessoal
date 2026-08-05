@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # O build precisa que os modulos possam ser importados sem banco de dados;
+    # valores falsos aqui garantem que ninguem introduza uma conexao no topo
+    # de um modulo sem perceber.
+    env:
+      DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
+      AUTH_SECRET: ci-secret-only-for-build
+      APP_URL: http://localhost:3000
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm install --no-audit --no-fund
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Testes
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      # Se o schema mudou e ninguem gerou a migration, o proximo deploy sobe
+      # com o banco desatualizado. Melhor descobrir aqui.
+      - name: Migration em dia com o schema
+        run: |
+          npx drizzle-kit generate
+          if [ -n "$(git status --porcelain drizzle)" ]; then
+            echo "::error::O schema mudou mas a migration nao foi gerada. Rode: npx drizzle-kit generate"
+            git status --porcelain drizzle
+            exit 1
+          fi

@@ -89,8 +89,16 @@ export const videos = pgTable(
     id: uuid('id').primaryKey().defaultRandom(),
     ideaId: uuid('idea_id').references(() => ideas.id, { onDelete: 'set null' }),
     status: text('status').notNull().default('queued'),
+    /**
+     * URL publica (para o player do painel) e chave no armazenamento (para
+     * ler o arquivo de volta na hora de publicar). Guardamos as duas: derivar
+     * a chave a partir da URL quebra assim que o dominio do bucket muda ou
+     * contem os mesmos segmentos de caminho.
+     */
     videoUrl: text('video_url'),
+    videoKey: text('video_key'),
     thumbUrl: text('thumb_url'),
+    thumbKey: text('thumb_key'),
     durationSeconds: real('duration_seconds'),
     sizeBytes: integer('size_bytes'),
     caption: text('caption').notNull().default(''),
@@ -103,8 +111,6 @@ export const videos = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     renderedAt: timestamp('rendered_at', { withTimezone: true }),
     publishedAt: timestamp('published_at', { withTimezone: true }),
-    /** Agendamento opcional: so publica depois deste horario. */
-    scheduledFor: timestamp('scheduled_for', { withTimezone: true }),
   },
   (t) => ({
     statusIdx: index('videos_status_idx').on(t.status),

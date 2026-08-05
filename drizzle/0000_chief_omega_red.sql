@@ -70,7 +70,9 @@ CREATE TABLE "videos" (
 	"idea_id" uuid,
 	"status" text DEFAULT 'queued' NOT NULL,
 	"video_url" text,
+	"video_key" text,
 	"thumb_url" text,
+	"thumb_key" text,
 	"duration_seconds" real,
 	"size_bytes" integer,
 	"caption" text DEFAULT '' NOT NULL,
@@ -81,8 +83,7 @@ CREATE TABLE "videos" (
 	"error" text,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"rendered_at" timestamp with time zone,
-	"published_at" timestamp with time zone,
-	"scheduled_for" timestamp with time zone
+	"published_at" timestamp with time zone
 );
 --> statement-breakpoint
 ALTER TABLE "ideas" ADD CONSTRAINT "ideas_trend_id_trends_id_fk" FOREIGN KEY ("trend_id") REFERENCES "public"."trends"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint

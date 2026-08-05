@@ -52,8 +52,8 @@ async function getJson(url: string, referer: string): Promise<any> {
   throw lastError;
 }
 
-/** Converte "1.2M", "340K", "8,5 mil" e afins em numero. */
-function parseCount(value: unknown): number | undefined {
+/** Converte "1.2M", "340K" e afins em numero. Exportada para teste. */
+export function parseCount(value: unknown): number | undefined {
   if (typeof value === 'number' && Number.isFinite(value)) return Math.round(value);
   if (typeof value !== 'string') return undefined;
   const cleaned = value.trim().replace(/\s/g, '').replace(',', '.');
@@ -149,7 +149,7 @@ export class CreativeCenterProvider implements TrendProvider {
  * Compara a media do ultimo terco com a do primeiro terco: >0 significa
  * que a tendencia ainda esta subindo, que e o que queremos pegar.
  */
-function slopeOf(trend: unknown): number | undefined {
+export function slopeOf(trend: unknown): number | undefined {
   if (!Array.isArray(trend) || trend.length < 3) return undefined;
   const values = trend
     .map((p: any) => Number(p?.value ?? p?.count ?? p))

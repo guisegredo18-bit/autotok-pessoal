@@ -1,5 +1,5 @@
 {
-  "id": "bb6d6dd7-c594-46af-9323-5c31137fb20b",
+  "id": "36d5bd85-3c08-4b41-9cbc-5928f1998624",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -504,8 +504,20 @@
           "primaryKey": false,
           "notNull": false
         },
+        "video_key": {
+          "name": "video_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "thumb_url": {
           "name": "thumb_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "thumb_key": {
+          "name": "thumb_key",
           "type": "text",
           "primaryKey": false,
           "notNull": false
@@ -576,12 +588,6 @@
         },
         "published_at": {
           "name": "published_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "scheduled_for": {
-          "name": "scheduled_for",
           "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": false

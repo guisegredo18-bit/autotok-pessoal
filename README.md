@@ -185,11 +185,18 @@ TikTok**.
 1. Três vezes por dia o GitHub Actions busca tendências e gera roteiros.
 2. Você abre **Ideias**, lê o roteiro e toca em **Gravar vídeo** nos que gostou.
 3. Alguns minutos depois chega a notificação: o vídeo está pronto.
-4. Em **Fila**, você assiste ao vídeo no próprio celular.
-5. **Aprovar e publicar** manda para o TikTok. **Descartar** joga fora.
+4. Em **Fila**, você assiste ao vídeo no próprio celular. A tela se atualiza
+   sozinha enquanto houver vídeo renderizando.
+5. Se quiser, toque em **Editar legenda** e ajuste o texto — é exatamente o que
+   vai para o TikTok, hashtags inclusas.
+6. **Aprovar e publicar** manda para o TikTok. **Descartar** joga fora.
 
 Tudo isso também funciona sob demanda pelos botões do painel — não precisa
 esperar o cron.
+
+No fim da tela inicial há **Últimas execuções**: o histórico dos jobs que
+rodaram no GitHub Actions, com o erro quando algum falha. É o lugar de olhar
+quando um vídeo não aparece, sem precisar abrir a aba de Actions no celular.
 
 ---
 
@@ -218,6 +225,8 @@ Para mudar o visual das legendas (fonte, tamanho, posição), edite o bloco
 
 ```bash
 npm run dev        # painel local em http://localhost:3000
+npm test           # testes da lógica pura (não precisa de rede nem banco)
+npm run typecheck  # checagem de tipos
 npm run scan       # busca tendências agora
 npm run ideas      # gera roteiros das tendências
 npm run render     # renderiza o próximo da fila (precisa de ffmpeg)
@@ -263,8 +272,14 @@ lib/
   pipeline/           orquestração (ideias → render → publicação)
   db/                 schema e configurações
 scripts/              entrypoints usados pelo GitHub Actions
-.github/workflows/    os três jobs: tendências, render e publicação
+tests/                testes da lógica pura (rodam offline)
+.github/workflows/    CI + os três jobs: tendências, render e publicação
 ```
+
+O CI roda typecheck, testes, build e ainda verifica se a migration do banco
+está em dia com o schema — se alguém alterar `lib/db/schema.ts` sem rodar
+`npx drizzle-kit generate`, o CI falha em vez de deixar o deploy subir com o
+banco desatualizado.
 
 ---
 

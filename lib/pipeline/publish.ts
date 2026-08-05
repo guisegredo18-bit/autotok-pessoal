@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { videos } from '@/lib/db/schema';
 import { getFile } from '@/lib/storage';
 import { push } from '@/lib/notify';
+import { withJob } from '@/lib/db/jobs';
 import { env } from '@/lib/env';
 import { getValidAccessToken, setCanPostPublic } from '@/lib/tiktok/account';
 import {
@@ -19,19 +20,11 @@ import {
  * passa na auditoria, a unica opcao devolvida e SELF_ONLY — nesse caso o video
  * chega como privado e voce troca a privacidade no app, com um toque.
  */
-function pickPrivacy(options: string[], preferred: string): string {
+export function pickPrivacy(options: string[], preferred: string): string {
   if (options.includes(preferred)) return preferred;
   if (options.includes('PUBLIC_TO_EVERYONE')) return 'PUBLIC_TO_EVERYONE';
   if (options.length > 0) return options[0];
   return 'SELF_ONLY';
-}
-
-/** Extrai a chave de armazenamento a partir da URL publica salva no banco. */
-function keyFromUrl(url: string): string {
-  const marker = '/videos/';
-  const at = url.indexOf(marker);
-  if (at === -1) throw new Error(`Nao consegui identificar o arquivo em ${url}`);
-  return url.slice(at + 1);
 }
 
 export type PublishResult = {
@@ -43,9 +36,16 @@ export type PublishResult = {
 
 /** Publica um video aprovado no TikTok. */
 export async function publishVideo(videoId: string): Promise<PublishResult> {
+  return withJob('publish', videoId, (log) => publishInner(videoId, log));
+}
+
+async function publishInner(
+  videoId: string,
+  log: (message: string) => void,
+): Promise<PublishResult> {
   const [video] = await db.select().from(videos).where(eq(videos.id, videoId)).limit(1);
   if (!video) throw new Error(`Video ${videoId} nao encontrado.`);
-  if (!video.videoUrl) throw new Error('Video ainda nao foi renderizado.');
+  if (!video.videoKey) throw new Error('Video ainda nao foi renderizado.');
   if (video.status === 'published') throw new Error('Este video ja foi publicado.');
 
   await db
@@ -62,7 +62,7 @@ export async function publishVideo(videoId: string): Promise<PublishResult> {
     const privateOnly = !options.includes('PUBLIC_TO_EVERYONE');
     await setCanPostPublic(!privateOnly);
 
-    const bytes = await getFile(keyFromUrl(video.videoUrl));
+    const bytes = await getFile(video.videoKey);
 
     if (
       creator.max_video_post_duration_sec &&
@@ -89,9 +89,13 @@ export async function publishVideo(videoId: string): Promise<PublishResult> {
       bytes.length,
     );
 
+    log(`enviando ${(bytes.length / 1024 / 1024).toFixed(1)}MB como ${privacyLevel}`);
     await uploadVideo(upload_url, bytes);
     await waitForPublish(accessToken, publish_id, {
-      onTick: (status) => console.log(`  status: ${status}`),
+      onTick: (status) => {
+        console.log(`  status: ${status}`);
+        log(`status: ${status}`);
+      },
     });
 
     await db

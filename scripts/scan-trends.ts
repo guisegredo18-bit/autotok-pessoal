@@ -1,17 +1,13 @@
 import { die } from './_bootstrap';
 
 async function main() {
-  const { scanTrends, pruneOldTrends } = await import('../lib/trends/scan');
-  const { env } = await import('../lib/env');
+  const { runScan } = await import('../lib/pipeline/trends');
 
-  console.log(`Buscando tendencias do TikTok (${env.trendCountry})…`);
-  const result = await scanTrends({ country: env.trendCountry, period: 7, limit: 30 });
+  console.log('Buscando tendencias do TikTok…');
+  const result = await runScan();
 
   console.log(`  ${result.fetched} lidas · ${result.inserted} novas · ${result.updated} atualizadas`);
   for (const warning of result.warnings) console.warn(`  aviso: ${warning}`);
-
-  const removed = await pruneOldTrends(30);
-  if (removed > 0) console.log(`  ${removed} tendencias antigas removidas`);
 
   if (result.fetched === 0) {
     throw new Error(

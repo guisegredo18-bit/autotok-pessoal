@@ -3,6 +3,8 @@ import { db } from '@/lib/db';
 import { videos } from '@/lib/db/schema';
 import { getAccount } from '@/lib/tiktok/account';
 import { ActionButton } from '@/components/action-button';
+import { AutoRefresh } from '@/components/auto-refresh';
+import { CaptionEditor } from '@/components/caption-editor';
 import { EmptyState, PageHeader, StatusPill, timeAgo } from '@/components/ui';
 import { publishVideoAction, rejectVideoAction, retryVideoAction } from '@/app/actions';
 
@@ -20,9 +22,13 @@ export default async function QueuePage() {
   ]);
 
   const waiting = rows.filter((v) => v.status === 'ready');
+  const working = rows.some((v) =>
+    ['queued', 'rendering', 'publishing'].includes(v.status),
+  );
 
   return (
     <>
+      {working && <AutoRefresh />}
       <PageHeader
         title="Fila"
         subtitle={
@@ -82,9 +88,13 @@ export default async function QueuePage() {
                 </div>
               )}
 
-              <p className="whitespace-pre-line text-[13px] leading-snug text-muted">
-                {video.caption}
-              </p>
+              {video.status === 'ready' ? (
+                <CaptionEditor videoId={video.id} caption={video.caption} />
+              ) : (
+                <p className="whitespace-pre-line text-[13px] leading-snug text-muted">
+                  {video.caption}
+                </p>
+              )}
 
               {video.error && (
                 <p className="mt-2 rounded-lg bg-red-950/40 p-2.5 text-[12px] leading-snug text-red-300">
