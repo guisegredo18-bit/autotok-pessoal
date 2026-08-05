@@ -2,6 +2,12 @@ import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
   serverExternalPackages: ['postgres'],
+  // Sem isto os arquivos .sql da pasta drizzle/ ficam de fora do bundle da
+  // Vercel, e a preparacao do banco pelo painel falha com "arquivo nao
+  // encontrado" — justamente no primeiro uso, quem instalou pelo celular.
+  outputFileTracingIncludes: {
+    '/**': ['./drizzle/**'],
+  },
   images: {
     remotePatterns: [
       { protocol: 'https', hostname: '**.pexels.com' },

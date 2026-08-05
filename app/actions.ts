@@ -6,6 +6,7 @@ import { eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { ideas, videos } from '@/lib/db/schema';
 import { saveSettings, type AppSettings } from '@/lib/db/settings';
+import { prepareDatabase } from '@/lib/db/setup';
 import { login, logout, requireAuth } from '@/lib/auth';
 import { runScan } from '@/lib/pipeline/trends';
 import { generateIdeasFromTrends, generateIdeasForTopic } from '@/lib/pipeline/ideas';
@@ -47,6 +48,22 @@ export async function loginAction(_prev: ActionState, form: FormData): Promise<A
 export async function logoutAction(): Promise<void> {
   await logout();
   redirect('/login');
+}
+
+// --- Primeira instalacao ----------------------------------------------------
+
+/** Cria as tabelas, para quem instalou pelo celular e nao tem terminal. */
+export async function prepareDatabaseAction(): Promise<ActionState> {
+  try {
+    await guard();
+    const result = await prepareDatabase();
+    if (result.ok) {
+      revalidatePath('/', 'layout');
+    }
+    return result;
+  } catch (err) {
+    return fail(err);
+  }
 }
 
 // --- Tendencias e ideias ----------------------------------------------------

@@ -7,10 +7,43 @@
  * mesmo com a configuracao pela metade, e a UI consegue mostrar o que falta.
  */
 
+/**
+ * Endereco publico da aplicacao.
+ *
+ * Derivar da Vercel quando APP_URL nao esta definida existe por um motivo
+ * pratico: quem instala pelo celular so descobre o dominio DEPOIS do primeiro
+ * deploy, e sem isso os links das notificacoes e o retorno do login do TikTok
+ * apontariam para localhost.
+ */
+type EnvSource = Record<string, string | undefined>;
+
+export function resolveAppUrl(source: EnvSource = process.env): string {
+  if (source.APP_URL) return source.APP_URL.replace(/\/$/, '');
+
+  const vercel = source.VERCEL_PROJECT_PRODUCTION_URL || source.VERCEL_URL;
+  if (vercel) return `https://${vercel}`;
+
+  return 'http://localhost:3000';
+}
+
+/**
+ * Rota de retorno do login do TikTok. Sempre a mesma rota, entao deriva do
+ * endereco — mas continua sobrescrivel, porque o valor precisa bater
+ * exatamente com o que esta cadastrado no portal do TikTok.
+ */
+export function resolveTikTokRedirect(
+  appUrl: string,
+  source: EnvSource = process.env,
+): string {
+  return source.TIKTOK_REDIRECT_URI || `${appUrl}/api/tiktok/callback`;
+}
+
+const APP_URL = resolveAppUrl();
+
 export const env = {
   databaseUrl: process.env.DATABASE_URL ?? '',
 
-  appUrl: (process.env.APP_URL ?? 'http://localhost:3000').replace(/\/$/, ''),
+  appUrl: APP_URL,
   appPassword: process.env.APP_PASSWORD ?? '',
   authSecret: process.env.AUTH_SECRET ?? '',
 
@@ -43,7 +76,7 @@ export const env = {
 
   tiktokClientKey: process.env.TIKTOK_CLIENT_KEY ?? '',
   tiktokClientSecret: process.env.TIKTOK_CLIENT_SECRET ?? '',
-  tiktokRedirectUri: process.env.TIKTOK_REDIRECT_URI ?? '',
+  tiktokRedirectUri: resolveTikTokRedirect(APP_URL),
 
   storageDriver: (process.env.STORAGE_DRIVER as 's3' | 'local') || 'local',
   s3Endpoint: process.env.S3_ENDPOINT ?? '',

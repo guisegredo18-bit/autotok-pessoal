@@ -7,6 +7,12 @@ O celular é o controle remoto: você recebe uma notificação quando um vídeo 
 pronto, assiste, e toca em aprovar. Renderizar vídeo exige um servidor — quem
 faz o trabalho pesado é o GitHub Actions.
 
+**Custo: zero.** Nenhum serviço usado na configuração padrão pede cartão de
+crédito.
+
+**Instalação:** dá para fazer tudo **[pelo iPhone](#instalação-pelo-iphone-sem-computador)**,
+sem terminal — ou **[pelo computador](#instalação-pelo-computador)**, se preferir.
+
 ---
 
 ## Como funciona
@@ -67,10 +73,116 @@ Três limitações reais, para não haver surpresa:
 
 ---
 
-## Instalação (passo a passo)
+## Instalação pelo iPhone (sem computador)
 
-Reserve uns 40 minutos na primeira vez. Tudo pode ser feito do computador; o
-uso no dia a dia é pelo celular.
+Dá para instalar tudo do celular — não é preciso terminal, `npm` nem ffmpeg na
+sua máquina. Reserve uns 40 minutos e faça na ordem abaixo: cada etapa deixa
+algo funcionando.
+
+> **Dica antes de começar:** abra o app **Notas** e vá colando cada chave que
+> obtiver. No Safari, mantenha uma aba por serviço — você vai alternar entre
+> elas.
+
+### Etapa 1 — pegar as 3 chaves grátis (~10 min)
+
+Nenhuma pede cartão de crédito.
+
+| O quê | Onde | O que copiar |
+|---|---|---|
+| Banco de dados | [neon.tech](https://neon.tech) → criar projeto | a *Connection string* |
+| IA (roteiros) | [aistudio.google.com/apikey](https://aistudio.google.com/apikey) → *Create API key* | a chave |
+| Imagens de fundo | [pexels.com/api](https://www.pexels.com/api/) | a chave |
+
+### Etapa 2 — publicar o painel (~5 min)
+
+1. No Safari, abra **[vercel.com/new](https://vercel.com/new)** e entre com o GitHub.
+2. Encontre **autotok-pessoal** na lista e toque em **Import**.
+3. Abra **Environment Variables** e adicione estas cinco:
+
+   | Nome | Valor |
+   |---|---|
+   | `DATABASE_URL` | a connection string do Neon |
+   | `GEMINI_API_KEY` | a chave do Google AI Studio |
+   | `PEXELS_API_KEY` | a chave do Pexels |
+   | `APP_PASSWORD` | uma senha sua, para entrar no painel |
+   | `AUTH_SECRET` | 40+ caracteres aleatórios (digite no teclado, serve) |
+
+4. Toque em **Deploy** e espere 2–3 minutos.
+
+> Não precisa informar `APP_URL` nem `TIKTOK_REDIRECT_URI`: o app descobre o
+> próprio endereço a partir do deploy da Vercel.
+
+### Etapa 3 — abrir e preparar o banco (~2 min)
+
+1. Abra a URL que a Vercel te deu e entre com a `APP_PASSWORD`.
+2. Vai aparecer **"Quase lá"** — toque em **Preparar banco de dados**. Isso cria
+   as tabelas. É uma vez só.
+3. Toque em **Compartilhar → Adicionar à Tela de Início**. Pronto: vira um app.
+
+Agora já dá para tocar em **Buscar tendências** e **Gerar ideias** e ver os
+roteiros. O que ainda não funciona é *gravar o vídeo* — falta a Etapa 4.
+
+### Etapa 4 — ligar a renderização (~15 min)
+
+Renderizar vídeo precisa de ffmpeg, que a Vercel não tem. Quem faz esse
+trabalho é o GitHub Actions, e ele precisa de um lugar para guardar o arquivo.
+
+**4a. Armazenamento** — em [dash.cloudflare.com](https://dash.cloudflare.com) →
+R2 → criar bucket → em *Settings* ative o **Public access** (guarde a URL
+`pub-xxx.r2.dev`) → em *Manage R2 API Tokens* crie um token de leitura e escrita.
+
+**4b. Secrets do GitHub** — abra
+`github.com/guisegredo18-bit/autotok-pessoal/settings/secrets/actions` no Safari
+e adicione, um por um:
+
+`DATABASE_URL`, `GEMINI_API_KEY`, `PEXELS_API_KEY`, `S3_ENDPOINT`, `S3_BUCKET`,
+`S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_PUBLIC_URL`
+
+Na aba **Variables** ao lado, adicione `AI_PROVIDER` = `gemini`.
+
+> Essa é a parte mais chata no celular. Se o formulário ficar apertado, toque no
+> **aA** na barra de endereço → **Solicitar Site para Computador**.
+
+**4c. Deixar o painel disparar os jobs** — crie um token clássico em
+`github.com/settings/tokens` com o escopo **repo**. Depois, na Vercel
+(*Settings → Environment Variables* do projeto), adicione:
+
+| Nome | Valor |
+|---|---|
+| `GITHUB_TOKEN` | o token que você acabou de criar |
+| `GITHUB_REPO` | `guisegredo18-bit/autotok-pessoal` |
+| `STORAGE_DRIVER` | `s3` |
+| `S3_ENDPOINT`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_PUBLIC_URL` | os mesmos valores da Etapa 4a |
+
+Toque em **Redeploy** para as variáveis valerem.
+
+Agora aprove uma ideia: em poucos minutos o vídeo aparece na aba **Fila**.
+
+### Etapa 5 — conectar o TikTok (~10 min)
+
+Em [developers.tiktok.com](https://developers.tiktok.com): criar app → adicionar
+**Login Kit** e **Content Posting API** → escopos `user.info.basic`,
+`video.publish`, `video.upload`.
+
+Em **Redirect URI**, cole exatamente:
+`https://SEU-APP.vercel.app/api/tiktok/callback`
+
+Adicione `TIKTOK_CLIENT_KEY` e `TIKTOK_CLIENT_SECRET` na Vercel, faça
+**Redeploy**, e conecte em **Configurações → Conectar TikTok**.
+
+### Etapa 6 — notificações no celular (~3 min)
+
+Instale o app **ntfy** na App Store, assine um tópico com nome longo e aleatório
+(ex.: `autotok-k3n8vqz1x`) e adicione `NTFY_TOPIC` com esse mesmo nome na Vercel
+e nos secrets do GitHub.
+
+Pronto: agora você recebe um aviso no celular sempre que um vídeo fica pronto.
+
+---
+
+## Instalação pelo computador
+
+Se preferir usar o terminal, é mais rápido. Reserve uns 40 minutos na primeira vez.
 
 ### 1. Banco de dados (grátis)
 
@@ -165,8 +277,8 @@ openssl rand -hex 32   # valor de AUTH_SECRET
 Escolha `APP_PASSWORD` (é a senha que você digita no celular).
 
 **Opção A — Vercel (mais simples):** importe o repositório, cole as variáveis do
-`.env` em Settings → Environment Variables, e faça o deploy. `APP_URL` é a URL
-que a Vercel te der.
+`.env` em Settings → Environment Variables, e faça o deploy. Não precisa
+informar `APP_URL`: o app usa o endereço do próprio deploy.
 
 **Opção B — VPS com Docker:**
 
@@ -181,6 +293,9 @@ Depois, crie as tabelas:
 npm install
 npm run db:push
 ```
+
+> Ou pule este comando: ao entrar no painel pela primeira vez, aparece um botão
+> **Preparar banco de dados** que faz exatamente o mesmo.
 
 ### 8. Ligue o GitHub Actions
 

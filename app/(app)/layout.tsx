@@ -1,14 +1,20 @@
 import { redirect } from 'next/navigation';
 import { isLoggedIn } from '@/lib/auth';
+import { databaseIsReady } from '@/lib/db/setup';
 import { Nav } from '@/components/nav';
+import { DatabaseSetup } from '@/components/database-setup';
 
 /**
- * Layout das telas internas. A checagem de sessao fica aqui, num unico ponto:
- * qualquer pagina nova dentro de (app) ja nasce protegida sem precisar lembrar
- * de adicionar a verificacao.
+ * Layout das telas internas.
+ *
+ * Duas checagens ficam aqui, num unico ponto: sessao e banco preparado.
+ * Qualquer pagina nova dentro de (app) ja nasce protegida — e ninguem
+ * consegue abrir uma tela que consultaria tabelas inexistentes.
  */
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   if (!(await isLoggedIn())) redirect('/login');
+
+  const ready = await databaseIsReady();
 
   return (
     <div className="mx-auto min-h-dvh max-w-lg">
@@ -20,9 +26,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           paddingBottom: 'calc(84px + env(safe-area-inset-bottom))',
         }}
       >
-        {children}
+        {ready ? children : <DatabaseSetup />}
       </main>
-      <Nav />
+      {ready && <Nav />}
     </div>
   );
 }
