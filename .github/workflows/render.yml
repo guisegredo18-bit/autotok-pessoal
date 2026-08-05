@@ -1,0 +1,67 @@
+name: Renderizar video
+
+on:
+  # Disparado pelo painel assim que voce aprova uma ideia.
+  repository_dispatch:
+    types: [render-video]
+  workflow_dispatch:
+    inputs:
+      video_id:
+        description: 'ID do video (vazio = pega o proximo da fila)'
+        required: false
+  schedule:
+    # Rede de seguranca: se algum disparo se perder, este cron limpa a fila.
+    - cron: '30 10 * * *'
+
+concurrency:
+  # Renderizar dois videos ao mesmo tempo brigaria por CPU no runner e deixaria
+  # os dois lentos; a fila espera.
+  group: render
+  cancel-in-progress: false
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+      ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
+      ELEVENLABS_VOICE_ID: ${{ secrets.ELEVENLABS_VOICE_ID }}
+      TTS_PROVIDER: ${{ vars.TTS_PROVIDER }}
+      TTS_VOICE: ${{ vars.TTS_VOICE }}
+      STORAGE_DRIVER: s3
+      S3_ENDPOINT: ${{ secrets.S3_ENDPOINT }}
+      S3_REGION: ${{ vars.S3_REGION }}
+      S3_BUCKET: ${{ secrets.S3_BUCKET }}
+      S3_ACCESS_KEY_ID: ${{ secrets.S3_ACCESS_KEY_ID }}
+      S3_SECRET_ACCESS_KEY: ${{ secrets.S3_SECRET_ACCESS_KEY }}
+      S3_PUBLIC_URL: ${{ secrets.S3_PUBLIC_URL }}
+      APP_URL: ${{ vars.APP_URL }}
+      NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+      NTFY_SERVER: ${{ vars.NTFY_SERVER }}
+      VIDEO_ID: ${{ github.event.client_payload.video_id || inputs.video_id }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      # O runner do Ubuntu ja traz ffmpeg, mas a linha abaixo garante que ele
+      # exista mesmo se a imagem mudar.
+      - name: Garantir ffmpeg
+        run: ffmpeg -version || (sudo apt-get update && sudo apt-get install -y ffmpeg)
+
+      - run: npm install --no-audit --no-fund
+
+      - name: Renderizar
+        run: |
+          if [ -n "$VIDEO_ID" ]; then
+            npm run render
+          else
+            npm run queue
+          fi

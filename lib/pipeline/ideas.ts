@@ -1,0 +1,113 @@
+import { db } from '@/lib/db';
+import { ideas } from '@/lib/db/schema';
+import { getSettings } from '@/lib/db/settings';
+import { topTrends } from '@/lib/trends/scan';
+import { generateIdeas } from '@/lib/ai/script';
+import type { TemplateName } from '@/lib/ai/templates';
+
+export type IdeaBatchResult = {
+  created: number;
+  discarded: number;
+  trendsUsed: string[];
+};
+
+/**
+ * Pega as melhores tendencias recentes e gera ideias para cada uma.
+ *
+ * Uma ideia por tendencia (em vez de N ideias para a melhor tendencia) e
+ * deliberado: espalhar entre assuntos diferentes rende mais do que apostar
+ * tudo numa hashtag so, e ainda serve de teste A/B natural do que funciona
+ * no seu perfil.
+ */
+export async function generateIdeasFromTrends(options?: {
+  count?: number;
+  template?: TemplateName;
+}): Promise<IdeaBatchResult> {
+  const settings = await getSettings();
+  const count = options?.count ?? settings.ideasPerScan;
+  const template = options?.template ?? settings.template;
+
+  const trends = await topTrends(count, settings.country);
+  if (trends.length === 0) {
+    throw new Error(
+      'Nenhuma tendencia recente no banco. Rode a varredura de tendencias primeiro.',
+    );
+  }
+
+  let created = 0;
+  let discarded = 0;
+  const trendsUsed: string[] = [];
+
+  for (const trend of trends) {
+    const generated = await generateIdeas({
+      settings,
+      template,
+      count: 1,
+      trendName: trend.name,
+      trendKind: trend.kind,
+    });
+
+    for (const idea of generated) {
+      // A IA pontua a propria ideia; abaixo do minimo nem chega ao painel.
+      // Isso evita que voce gaste atencao revisando conteudo fraco.
+      if (idea.score < settings.minScore) {
+        discarded++;
+        continue;
+      }
+
+      await db.insert(ideas).values({
+        trendId: trend.id,
+        template,
+        title: idea.title,
+        hook: idea.hook,
+        scenes: idea.scenes,
+        caption: idea.caption,
+        hashtags: idea.hashtags,
+        score: idea.score,
+        status: 'pending',
+        notes: idea.reasoning,
+      });
+      created++;
+    }
+
+    trendsUsed.push(trend.name);
+  }
+
+  return { created, discarded, trendsUsed };
+}
+
+/** Gera ideias para um assunto livre, sem depender de tendencia. */
+export async function generateIdeasForTopic(
+  topic: string,
+  options?: { count?: number; template?: TemplateName },
+): Promise<IdeaBatchResult> {
+  const settings = await getSettings();
+  const template = options?.template ?? settings.template;
+
+  const generated = await generateIdeas({
+    settings,
+    template,
+    count: options?.count ?? 3,
+    trendName: topic,
+    trendKind: 'keyword',
+  });
+
+  let created = 0;
+  for (const idea of generated) {
+    await db.insert(ideas).values({
+      trendId: null,
+      template,
+      title: idea.title,
+      hook: idea.hook,
+      scenes: idea.scenes,
+      caption: idea.caption,
+      hashtags: idea.hashtags,
+      score: idea.score,
+      status: 'pending',
+      notes: idea.reasoning,
+    });
+    created++;
+  }
+
+  return { created, discarded: 0, trendsUsed: [topic] };
+}

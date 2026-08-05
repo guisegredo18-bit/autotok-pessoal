@@ -1,0 +1,246 @@
+'use server';
+
+import { revalidatePath } from 'next/cache';
+import { redirect } from 'next/navigation';
+import { eq } from 'drizzle-orm';
+import { db } from '@/lib/db';
+import { ideas, videos } from '@/lib/db/schema';
+import { saveSettings, type AppSettings } from '@/lib/db/settings';
+import { login, logout, requireAuth } from '@/lib/auth';
+import { scanTrends } from '@/lib/trends/scan';
+import { generateIdeasFromTrends, generateIdeasForTopic } from '@/lib/pipeline/ideas';
+import { enqueueRender, renderQueuedVideo } from '@/lib/pipeline/render';
+import { publishVideo } from '@/lib/pipeline/publish';
+import { canDispatch, dispatch } from '@/lib/dispatch';
+import { disconnectAccount } from '@/lib/tiktok/account';
+import { env } from '@/lib/env';
+
+/**
+ * Server actions do painel.
+ *
+ * Padrao aqui: toda action devolve `{ ok, message }` em vez de lancar. Assim a
+ * tela mostra o erro real (chave faltando, tendencia vazia, TikTok recusou)
+ * em vez da pagina de erro generica do Next — o que importa quando o unico
+ * lugar onde voce ve isso e a tela do celular.
+ */
+export type ActionState = { ok: boolean; message: string } | null;
+
+async function guard(): Promise<void> {
+  await requireAuth();
+}
+
+function fail(err: unknown): ActionState {
+  const message = err instanceof Error ? err.message : String(err);
+  return { ok: false, message };
+}
+
+// --- Sessao ----------------------------------------------------------------
+
+export async function loginAction(_prev: ActionState, form: FormData): Promise<ActionState> {
+  const password = String(form.get('password') ?? '');
+  if (!(await login(password))) {
+    return { ok: false, message: 'Senha incorreta.' };
+  }
+  redirect('/');
+}
+
+export async function logoutAction(): Promise<void> {
+  await logout();
+  redirect('/login');
+}
+
+// --- Tendencias e ideias ----------------------------------------------------
+
+export async function scanAction(): Promise<ActionState> {
+  try {
+    await guard();
+    const result = await scanTrends({ country: env.trendCountry, period: 7, limit: 30 });
+    revalidatePath('/tendencias');
+    revalidatePath('/');
+
+    const base = `${result.fetched} tendencias lidas — ${result.inserted} novas, ${result.updated} atualizadas.`;
+    return {
+      ok: result.fetched > 0,
+      message:
+        result.warnings.length > 0
+          ? `${base} Avisos: ${result.warnings.join('; ')}`
+          : base,
+    };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+export async function generateIdeasAction(
+  _prev: ActionState,
+  form: FormData,
+): Promise<ActionState> {
+  try {
+    await guard();
+    const topic = String(form.get('topic') ?? '').trim();
+
+    // Gerar roteiro leva dezenas de segundos e estoura o limite de tempo de
+    // funcao serverless. Quando o GitHub Actions esta configurado, mandamos
+    // para la; senao rodamos aqui mesmo e torcemos pelo timeout do host.
+    if (!topic && canDispatch()) {
+      await dispatch('generate-ideas');
+      return { ok: true, message: 'Geracao iniciada no GitHub Actions. Atualize em ~1 minuto.' };
+    }
+
+    const result = topic
+      ? await generateIdeasForTopic(topic)
+      : await generateIdeasFromTrends();
+
+    revalidatePath('/ideias');
+    return {
+      ok: true,
+      message: `${result.created} ideia(s) criada(s)${
+        result.discarded > 0 ? `, ${result.discarded} descartada(s) por nota baixa` : ''
+      }.`,
+    };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+/** Atalho do painel inicial: gera ideias direto das tendencias, sem assunto. */
+export async function generateFromTrendsAction(): Promise<ActionState> {
+  return generateIdeasAction(null, new FormData());
+}
+
+export async function approveIdeaAction(ideaId: string): Promise<ActionState> {
+  try {
+    await guard();
+    const videoId = await enqueueRender(ideaId);
+
+    if (canDispatch()) {
+      await dispatch('render-video', { video_id: videoId });
+    } else {
+      // Sem GitHub Actions o render roda aqui. Vai demorar; o `void` evita
+      // segurar a resposta, e o status no banco conta o resto da historia.
+      void renderQueuedVideo(videoId).catch((err) => console.error(err));
+    }
+
+    revalidatePath('/ideias');
+    revalidatePath('/fila');
+    return { ok: true, message: 'Video entrou na fila de renderizacao.' };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+export async function rejectIdeaAction(ideaId: string): Promise<ActionState> {
+  try {
+    await guard();
+    await db.update(ideas).set({ status: 'rejected' }).where(eq(ideas.id, ideaId));
+    revalidatePath('/ideias');
+    return { ok: true, message: 'Ideia descartada.' };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+// --- Fila de videos ---------------------------------------------------------
+
+export async function publishVideoAction(videoId: string): Promise<ActionState> {
+  try {
+    await guard();
+
+    if (canDispatch()) {
+      await db.update(videos).set({ status: 'publishing' }).where(eq(videos.id, videoId));
+      await dispatch('publish-video', { video_id: videoId });
+      revalidatePath('/fila');
+      return { ok: true, message: 'Publicacao iniciada. Voce recebe uma notificacao ao terminar.' };
+    }
+
+    const result = await publishVideo(videoId);
+    revalidatePath('/fila');
+    return {
+      ok: true,
+      message: result.privateOnly
+        ? 'Enviado como PRIVADO (app ainda nao auditado pelo TikTok). Abra o TikTok e mude a privacidade.'
+        : 'Publicado no TikTok.',
+    };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+export async function rejectVideoAction(videoId: string): Promise<ActionState> {
+  try {
+    await guard();
+    await db.update(videos).set({ status: 'rejected' }).where(eq(videos.id, videoId));
+    revalidatePath('/fila');
+    return { ok: true, message: 'Video descartado.' };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+export async function retryVideoAction(videoId: string): Promise<ActionState> {
+  try {
+    await guard();
+    await db
+      .update(videos)
+      .set({ status: 'queued', error: null })
+      .where(eq(videos.id, videoId));
+
+    if (canDispatch()) {
+      await dispatch('render-video', { video_id: videoId });
+    } else {
+      void renderQueuedVideo(videoId).catch((err) => console.error(err));
+    }
+
+    revalidatePath('/fila');
+    return { ok: true, message: 'Renderizacao reiniciada.' };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+// --- Configuracoes ----------------------------------------------------------
+
+export async function saveSettingsAction(
+  _prev: ActionState,
+  form: FormData,
+): Promise<ActionState> {
+  try {
+    await guard();
+    const num = (key: string, fallback: number) => {
+      const value = Number(form.get(key));
+      return Number.isFinite(value) ? value : fallback;
+    };
+
+    const patch: Partial<AppSettings> = {
+      niche: String(form.get('niche') ?? '').trim(),
+      template: (form.get('template') === 'produto' ? 'produto' : 'viral'),
+      country: String(form.get('country') ?? 'BR').toUpperCase().slice(0, 2),
+      ideasPerScan: Math.max(1, Math.min(20, num('ideasPerScan', 5))),
+      videosPerDay: Math.max(1, Math.min(20, num('videosPerDay', 3))),
+      minScore: Math.max(0, Math.min(100, num('minScore', 60))),
+      targetDuration: Math.max(10, Math.min(180, num('targetDuration', 30))),
+      captionSignature: String(form.get('captionSignature') ?? '').trim(),
+      blockedWords: String(form.get('blockedWords') ?? '')
+        .split(',')
+        .map((w) => w.trim())
+        .filter(Boolean),
+    };
+
+    await saveSettings(patch);
+    revalidatePath('/config');
+    return { ok: true, message: 'Configuracoes salvas.' };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+export async function disconnectTikTokAction(): Promise<ActionState> {
+  try {
+    await guard();
+    await disconnectAccount();
+    revalidatePath('/config');
+    return { ok: true, message: 'Conta desconectada.' };
+  } catch (err) {
+    return fail(err);
+  }
+}

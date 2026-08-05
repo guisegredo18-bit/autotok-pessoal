@@ -1,0 +1,36 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: autotok
+      POSTGRES_PASSWORD: autotok
+      POSTGRES_DB: autotok
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - '5432:5432'
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U autotok']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      # sobrescreve para apontar ao Postgres do compose
+      DATABASE_URL: postgresql://autotok:autotok@db:5432/autotok
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - '3000:3000'
+    volumes:
+      - media:/app/data
+
+volumes:
+  pgdata:
+  media:
