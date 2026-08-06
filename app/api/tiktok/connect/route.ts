@@ -3,6 +3,7 @@ import { cookies } from 'next/headers';
 import { randomBytes } from 'node:crypto';
 import { isLoggedIn } from '@/lib/auth';
 import { authorizeUrl } from '@/lib/tiktok/api';
+import { hydrateEnv } from '@/lib/secrets';
 import { env } from '@/lib/env';
 
 /**
@@ -16,6 +17,8 @@ export async function GET() {
   if (!(await isLoggedIn())) {
     return NextResponse.redirect(`${env.appUrl}/login`);
   }
+  // As credenciais do TikTok podem estar no banco, preenchidas pelo painel.
+  await hydrateEnv();
 
   const state = randomBytes(16).toString('hex');
   (await cookies()).set('tiktok_oauth_state', state, {

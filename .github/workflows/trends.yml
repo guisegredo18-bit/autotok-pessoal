@@ -19,23 +19,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
+      # Apenas dois secrets sao necessarios: onde estao as chaves, e com o que
+      # elas foram cifradas. Todo o resto (Gemini, Pexels, R2, TikTok, ntfy)
+      # e lido do banco, preenchido por voce na tela Configuracoes do painel.
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
-      # Preencha apenas o secret do provedor escolhido em AI_PROVIDER; os
-      # outros ficam vazios sem causar problema.
-      AI_PROVIDER: ${{ vars.AI_PROVIDER }}
-      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-      GEMINI_MODEL: ${{ vars.GEMINI_MODEL }}
-      GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
-      GROQ_MODEL: ${{ vars.GROQ_MODEL }}
-      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-      OPENROUTER_MODEL: ${{ vars.OPENROUTER_MODEL }}
-      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-      ANTHROPIC_MODEL: ${{ vars.ANTHROPIC_MODEL }}
-      TREND_COUNTRY: ${{ vars.TREND_COUNTRY }}
-      TREND_LANGUAGE: ${{ vars.TREND_LANGUAGE }}
+      AUTH_SECRET: ${{ secrets.AUTH_SECRET }}
       APP_URL: ${{ vars.APP_URL }}
-      NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
-      NTFY_SERVER: ${{ vars.NTFY_SERVER }}
 
     steps:
       - uses: actions/checkout@v4

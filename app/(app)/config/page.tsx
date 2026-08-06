@@ -4,26 +4,34 @@ import { PROVIDER_LABELS, activeModel } from '@/lib/ai/providers';
 import { getAccount } from '@/lib/tiktok/account';
 import { ActionButton } from '@/components/action-button';
 import { SettingsForm } from '@/components/settings-form';
+import { SecretsForm } from '@/components/secrets-form';
+import { hydrateEnv, secretsForForm, secretsStatus } from '@/lib/secrets';
 import { PageHeader } from '@/components/ui';
 import { disconnectTikTokAction, logoutAction } from '@/app/actions';
 
 export const dynamic = 'force-dynamic';
 
 const CHECKS: { key: keyof ReturnType<typeof integrationStatus>; label: string; hint: string }[] = [
-  { key: 'database', label: 'Banco de dados', hint: 'DATABASE_URL' },
-  { key: 'ia', label: 'IA (roteiros)', hint: 'AI_PROVIDER + a chave do provedor' },
-  { key: 'tiktok', label: 'App do TikTok', hint: 'TIKTOK_CLIENT_KEY / SECRET / REDIRECT_URI' },
-  { key: 'storage', label: 'Armazenamento', hint: 'S3_* (obrigatorio com GitHub Actions)' },
-  { key: 'stock', label: 'Banco de imagens', hint: 'PEXELS_API_KEY' },
-  { key: 'tts', label: 'Narracao', hint: 'TTS_PROVIDER (edge e gratis)' },
-  { key: 'actions', label: 'GitHub Actions', hint: 'GITHUB_TOKEN / GITHUB_REPO' },
-  { key: 'push', label: 'Notificacao no iPhone', hint: 'NTFY_TOPIC' },
+  { key: 'database', label: 'Banco de dados', hint: 'unica chave que fica no ambiente' },
+  { key: 'ia', label: 'IA (roteiros)', hint: 'provedor + chave, abaixo' },
+  { key: 'stock', label: 'Banco de imagens', hint: 'chave do Pexels' },
+  { key: 'storage', label: 'Armazenamento', hint: 'R2 / S3, para renderizar' },
+  { key: 'actions', label: 'GitHub Actions', hint: 'token e repositorio' },
+  { key: 'tiktok', label: 'App do TikTok', hint: 'client key e secret' },
+  { key: 'tts', label: 'Narracao', hint: 'Edge TTS e gratis e ja vem ligado' },
+  { key: 'push', label: 'Notificacao no iPhone', hint: 'topico do ntfy' },
 ];
 
 export default async function ConfigPage() {
-  const [settings, account] = await Promise.all([
+  // Carrega as chaves guardadas no banco antes de montar a tela, senao o
+  // resumo mostraria como faltando algo que ja esta configurado.
+  await hydrateEnv(true);
+
+  const [settings, account, secretValues, filled] = await Promise.all([
     getSettings(),
     getAccount().catch(() => null),
+    secretsForForm(),
+    secretsStatus(),
   ]);
   const status = integrationStatus();
 
@@ -77,8 +85,8 @@ export default async function ConfigPage() {
               </a>
               {!status.tiktok && (
                 <p className="text-[12px] text-amber-400">
-                  Preencha TIKTOK_CLIENT_KEY, TIKTOK_CLIENT_SECRET e
-                  TIKTOK_REDIRECT_URI no .env antes de conectar.
+                  Preencha a client key e o client secret do TikTok em Chaves,
+                  logo abaixo, antes de conectar.
                 </p>
               )}
             </div>
@@ -116,10 +124,21 @@ export default async function ConfigPage() {
         </p>
         {env.aiProvider === 'anthropic' && (
           <p className="mt-1 px-1 text-[12px] leading-snug text-amber-400">
-            Este provedor cobra por uso. Para custo zero, mude AI_PROVIDER para
-            gemini, groq, openrouter ou ollama.
+            Este provedor cobra por uso. Para custo zero, escolha Gemini, Groq,
+            OpenRouter ou Ollama abaixo.
           </p>
         )}
+      </section>
+
+      <section className="mb-5">
+        <h2 className="mb-2 text-[13px] font-semibold uppercase tracking-wide text-muted">
+          Chaves
+        </h2>
+        <p className="mb-3 px-1 text-[12px] leading-snug text-muted">
+          Preencha aqui, pelo celular, em vez de configurar secrets no GitHub.
+          Fica tudo cifrado no seu banco de dados, e o GitHub Actions le daqui.
+        </p>
+        <SecretsForm values={secretValues} filled={filled} />
       </section>
 
       <form action={logoutAction}>

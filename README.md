@@ -131,30 +131,31 @@ trabalho é o GitHub Actions, e ele precisa de um lugar para guardar o arquivo.
 R2 → criar bucket → em *Settings* ative o **Public access** (guarde a URL
 `pub-xxx.r2.dev`) → em *Manage R2 API Tokens* crie um token de leitura e escrita.
 
-**4b. Secrets do GitHub** — abra
-`github.com/guisegredo18-bit/autotok-pessoal/settings/secrets/actions` no Safari
-e adicione, um por um:
+**4b. Preencher as chaves no painel** — abra o app no seu iPhone, vá em
+**Configurações → Chaves** e preencha:
 
-`DATABASE_URL`, `GEMINI_API_KEY`, `PEXELS_API_KEY`, `S3_ENDPOINT`, `S3_BUCKET`,
-`S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_PUBLIC_URL`
+- **Armazenamento:** os dados do R2 da etapa anterior
+- **Renderização no GitHub Actions:** um token clássico criado em
+  [github.com/settings/tokens](https://github.com/settings/tokens) com o escopo
+  **repo**, e o repositório (`guisegredo18-bit/autotok-pessoal`)
 
-Na aba **Variables** ao lado, adicione `AI_PROVIDER` = `gemini`.
+Toque em **Salvar chaves**. Elas ficam cifradas no seu banco de dados.
 
-> Essa é a parte mais chata no celular. Se o formulário ficar apertado, toque no
-> **aA** na barra de endereço → **Solicitar Site para Computador**.
-
-**4c. Deixar o painel disparar os jobs** — crie um token clássico em
-`github.com/settings/tokens` com o escopo **repo**. Depois, na Vercel
-(*Settings → Environment Variables* do projeto), adicione:
+**4c. Dois secrets no GitHub** — só estes dois, uma vez só. Abra
+`github.com/guisegredo18-bit/autotok-pessoal/settings/secrets/actions` e
+adicione:
 
 | Nome | Valor |
 |---|---|
-| `GITHUB_TOKEN` | o token que você acabou de criar |
-| `GITHUB_REPO` | `guisegredo18-bit/autotok-pessoal` |
-| `STORAGE_DRIVER` | `s3` |
-| `S3_ENDPOINT`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_PUBLIC_URL` | os mesmos valores da Etapa 4a |
+| `DATABASE_URL` | a mesma connection string do Neon |
+| `AUTH_SECRET` | o mesmo valor que você pôs na Vercel |
 
-Toque em **Redeploy** para as variáveis valerem.
+É isso: o robô que renderiza os vídeos usa esses dois para chegar no banco e
+decifrar as demais chaves. Nenhuma outra credencial precisa ser copiada para
+o GitHub.
+
+> Se o formulário do GitHub ficar apertado no celular, toque no **aA** na barra
+> de endereço → **Solicitar Site para Computador**.
 
 Agora aprove uma ideia: em poucos minutos o vídeo aparece na aba **Fila**.
 
@@ -167,14 +168,14 @@ Em [developers.tiktok.com](https://developers.tiktok.com): criar app → adicion
 Em **Redirect URI**, cole exatamente:
 `https://SEU-APP.vercel.app/api/tiktok/callback`
 
-Adicione `TIKTOK_CLIENT_KEY` e `TIKTOK_CLIENT_SECRET` na Vercel, faça
-**Redeploy**, e conecte em **Configurações → Conectar TikTok**.
+Copie a *client key* e o *client secret* para **Configurações → Chaves** no
+painel, salve, e toque em **Conectar TikTok**.
 
 ### Etapa 6 — notificações no celular (~3 min)
 
 Instale o app **ntfy** na App Store, assine um tópico com nome longo e aleatório
-(ex.: `autotok-k3n8vqz1x`) e adicione `NTFY_TOPIC` com esse mesmo nome na Vercel
-e nos secrets do GitHub.
+(ex.: `autotok-k3n8vqz1x`) e coloque esse mesmo nome em **Configurações →
+Chaves → Notificação no celular**.
 
 Pronto: agora você recebe um aviso no celular sempre que um vídeo fica pronto.
 

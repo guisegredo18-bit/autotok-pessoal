@@ -7,6 +7,7 @@ import { renderVideo } from '@/lib/video/render';
 import { putFile } from '@/lib/storage';
 import { push } from '@/lib/notify';
 import { withJob } from '@/lib/db/jobs';
+import { hydrateEnv } from '@/lib/secrets';
 import { env } from '@/lib/env';
 
 /** Coloca uma ideia aprovada na fila de renderizacao. */
@@ -38,6 +39,7 @@ export async function enqueueRender(ideaId: string): Promise<string> {
  * request HTTP por timeout.
  */
 export async function renderQueuedVideo(videoId: string): Promise<void> {
+  await hydrateEnv();
   return withJob('render', videoId, (log) => renderInner(videoId, log));
 }
 

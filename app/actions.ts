@@ -7,6 +7,7 @@ import { db } from '@/lib/db';
 import { ideas, videos } from '@/lib/db/schema';
 import { saveSettings, type AppSettings } from '@/lib/db/settings';
 import { prepareDatabase } from '@/lib/db/setup';
+import { hydrateEnv, saveSecrets, type SecretValues } from '@/lib/secrets';
 import { login, logout, requireAuth } from '@/lib/auth';
 import { runScan } from '@/lib/pipeline/trends';
 import { generateIdeasFromTrends, generateIdeasForTopic } from '@/lib/pipeline/ideas';
@@ -26,8 +27,14 @@ import { env } from '@/lib/env';
  */
 export type ActionState = { ok: boolean; message: string } | null;
 
+/**
+ * Toda action passa por aqui: confere a sessao e carrega as chaves guardadas
+ * no banco para dentro do `env`, para que o restante do codigo continue
+ * lendo `env.pexelsApiKey` sem saber de onde o valor veio.
+ */
 async function guard(): Promise<void> {
   await requireAuth();
+  await hydrateEnv();
 }
 
 function fail(err: unknown): ActionState {
@@ -281,6 +288,44 @@ export async function saveSettingsAction(
     await saveSettings(patch);
     revalidatePath('/config');
     return { ok: true, message: 'Configuracoes salvas.' };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+/**
+ * Salva as chaves de integracao.
+ *
+ * Campo em branco significa "nao mexer" nos campos sensiveis — eles nunca sao
+ * devolvidos preenchidos para a tela, entao um envio de formulario nao pode
+ * apagar uma chave por omissao. Para remover de fato, existe o botao de
+ * limpar de cada campo, que manda o valor literal "-".
+ */
+export async function saveSecretsAction(
+  _prev: ActionState,
+  form: FormData,
+): Promise<ActionState> {
+  try {
+    await guard();
+
+    const patch: SecretValues = {};
+    for (const [key, raw] of form.entries()) {
+      if (typeof raw !== 'string') continue;
+      const value = raw.trim();
+      if (value === '') continue;
+      patch[key as keyof SecretValues] = value === '-' ? '' : value;
+    }
+
+    if (Object.keys(patch).length === 0) {
+      return { ok: false, message: 'Nada para salvar.' };
+    }
+
+    await saveSecrets(patch);
+    await hydrateEnv(true);
+
+    revalidatePath('/config');
+    revalidatePath('/');
+    return { ok: true, message: 'Chaves salvas e ja em uso.' };
   } catch (err) {
     return fail(err);
   }

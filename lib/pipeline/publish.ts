@@ -4,6 +4,7 @@ import { videos } from '@/lib/db/schema';
 import { getFile } from '@/lib/storage';
 import { push } from '@/lib/notify';
 import { withJob } from '@/lib/db/jobs';
+import { hydrateEnv } from '@/lib/secrets';
 import { env } from '@/lib/env';
 import { getValidAccessToken, setCanPostPublic } from '@/lib/tiktok/account';
 import {
@@ -36,6 +37,7 @@ export type PublishResult = {
 
 /** Publica um video aprovado no TikTok. */
 export async function publishVideo(videoId: string): Promise<PublishResult> {
+  await hydrateEnv();
   return withJob('publish', videoId, (log) => publishInner(videoId, log));
 }
 

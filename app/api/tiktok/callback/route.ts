@@ -3,6 +3,7 @@ import { cookies } from 'next/headers';
 import { isLoggedIn } from '@/lib/auth';
 import { exchangeCode } from '@/lib/tiktok/api';
 import { saveAccount } from '@/lib/tiktok/account';
+import { hydrateEnv } from '@/lib/secrets';
 import { env } from '@/lib/env';
 
 /** Retorno do TikTok apos o usuario autorizar (ou recusar). */
@@ -15,6 +16,7 @@ export async function GET(request: NextRequest) {
   if (!(await isLoggedIn())) {
     return NextResponse.redirect(`${env.appUrl}/login`);
   }
+  await hydrateEnv();
 
   const params = request.nextUrl.searchParams;
   const error = params.get('error');

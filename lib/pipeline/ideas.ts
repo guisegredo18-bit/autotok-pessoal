@@ -4,6 +4,7 @@ import { getSettings } from '@/lib/db/settings';
 import { topTrends } from '@/lib/trends/scan';
 import { generateIdeas } from '@/lib/ai/script';
 import { withJob } from '@/lib/db/jobs';
+import { hydrateEnv } from '@/lib/secrets';
 import type { TemplateName } from '@/lib/ai/templates';
 
 export type IdeaBatchResult = {
@@ -24,6 +25,7 @@ export async function generateIdeasFromTrends(options?: {
   count?: number;
   template?: TemplateName;
 }): Promise<IdeaBatchResult> {
+  await hydrateEnv();
   return withJob('ideas', undefined, (log) => fromTrends(log, options));
 }
 
@@ -90,6 +92,7 @@ export async function generateIdeasForTopic(
   topic: string,
   options?: { count?: number; template?: TemplateName },
 ): Promise<IdeaBatchResult> {
+  await hydrateEnv();
   const settings = await getSettings();
   const template = options?.template ?? settings.template;
 

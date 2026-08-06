@@ -1,5 +1,6 @@
 import { scanTrends, pruneOldTrends, type ScanResult } from '@/lib/trends/scan';
 import { withJob } from '@/lib/db/jobs';
+import { hydrateEnv } from '@/lib/secrets';
 import { env } from '@/lib/env';
 
 /**
@@ -9,6 +10,7 @@ import { env } from '@/lib/env';
  * parte que grava historico de execucao mora aqui.
  */
 export async function runScan(): Promise<ScanResult> {
+  await hydrateEnv();
   return withJob('scan', undefined, async (log) => {
     log(`buscando tendencias (${env.trendCountry})`);
     const result = await scanTrends({ country: env.trendCountry, period: 7, limit: 30 });
