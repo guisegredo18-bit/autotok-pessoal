@@ -6,7 +6,12 @@ import { ActionButton } from '@/components/action-button';
 import { AutoRefresh } from '@/components/auto-refresh';
 import { CaptionEditor } from '@/components/caption-editor';
 import { EmptyState, PageHeader, StatusPill, timeAgo } from '@/components/ui';
-import { publishVideoAction, rejectVideoAction, retryVideoAction } from '@/app/actions';
+import {
+  clearQueueAction,
+  publishVideoAction,
+  rejectVideoAction,
+  retryVideoAction,
+} from '@/app/actions';
 
 export const dynamic = 'force-dynamic';
 
@@ -25,6 +30,9 @@ export default async function QueuePage() {
   const working = rows.some((v) =>
     ['queued', 'rendering', 'publishing'].includes(v.status),
   );
+  const stuck = rows.filter((v) =>
+    ['queued', 'rendering', 'failed'].includes(v.status),
+  ).length;
 
   return (
     <>
@@ -37,6 +45,24 @@ export default async function QueuePage() {
             : 'Nada esperando por voce agora.'
         }
       />
+
+      {/* Videos presos so atrapalham: nao rendem nada e escondem os que
+          importam. O botao so aparece quando ha o que limpar. */}
+      {stuck > 0 && (
+        <div className="mb-4">
+          <ActionButton
+            action={clearQueueAction}
+            className="btn-danger"
+            confirm={`Descartar ${stuck} video(s) preso(s) e cancelar as execucoes pendentes?`}
+          >
+            Limpar fila ({stuck} preso{stuck > 1 ? 's' : ''})
+          </ActionButton>
+          <p className="mt-1.5 text-[12px] leading-snug text-muted">
+            Descarta apenas o que travou. Videos prontos para aprovacao e ja
+            publicados nao sao tocados.
+          </p>
+        </div>
+      )}
 
       {account && !account.canPostPublic && (
         <div className="card mb-4 border-amber-900/60 bg-amber-950/30">

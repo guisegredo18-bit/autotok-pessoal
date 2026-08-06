@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { ideas, trends, videos } from '@/lib/db/schema';
 import { getSettings, saveSettings, type AppSettings } from '@/lib/db/settings';
@@ -14,7 +14,12 @@ import { generateIdeasFromTrends, generateIdeasForTopic } from '@/lib/pipeline/i
 import { enqueueRender, renderQueuedVideo } from '@/lib/pipeline/render';
 import { publishVideo } from '@/lib/pipeline/publish';
 import { canDispatch, dispatch } from '@/lib/dispatch';
-import { listRecentRuns, putSecret, queueHealth } from '@/lib/github/repo';
+import {
+  cancelPendingRuns,
+  listRecentRuns,
+  putSecret,
+  queueHealth,
+} from '@/lib/github/repo';
 import { disconnectAccount } from '@/lib/tiktok/account';
 import { env } from '@/lib/env';
 
@@ -291,6 +296,49 @@ export async function updateCaptionAction(
 
     revalidatePath('/fila');
     return { ok: true, message: 'Legenda atualizada.' };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+/**
+ * Esvazia a fila.
+ *
+ * Descarta os videos presos e cancela as execucoes que ainda esperam maquina
+ * no GitHub. Mexe apenas no que nao deu certo — video pronto para aprovacao e
+ * video ja publicado ficam onde estao, porque sao justamente o que voce nao
+ * quer perder ao limpar a bagunca.
+ */
+export async function clearQueueAction(): Promise<ActionState> {
+  try {
+    await guard();
+
+    const descartados = await db
+      .update(videos)
+      .set({ status: 'rejected', error: null })
+      .where(sql`${videos.status} in ('queued', 'rendering', 'failed')`)
+      .returning({ id: videos.id });
+
+    let extra = '';
+    if (canDispatch()) {
+      // Cancelar no GitHub e complemento: se falhar, a fila do painel ja foi
+      // esvaziada, que e o que trava o seu uso.
+      const { cancelled, failed } = await cancelPendingRuns().catch(() => ({
+        cancelled: 0,
+        failed: 0,
+      }));
+      if (cancelled > 0) extra += ` ${cancelled} execucao(oes) cancelada(s) no GitHub.`;
+      if (failed > 0) {
+        extra += ` ${failed} nao pude cancelar — o GitHub as encerra sozinho por tempo.`;
+      }
+    }
+
+    revalidatePath('/fila');
+    revalidatePath('/');
+    return {
+      ok: true,
+      message: `${descartados.length} video(s) descartado(s).${extra}`,
+    };
   } catch (err) {
     return fail(err);
   }

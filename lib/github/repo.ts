@@ -117,6 +117,44 @@ export function queueHealth(runs: WorkflowRun[]): QueueHealth {
   };
 }
 
+/**
+ * Cancela as execucoes que ainda esperam maquina.
+ *
+ * Cada tentativa e independente: uma que falhe (o GitHub responde 502 com
+ * alguma frequencia, e um run que acabou de terminar recusa cancelamento) nao
+ * pode impedir o cancelamento das outras.
+ */
+export async function cancelPendingRuns(): Promise<{ cancelled: number; failed: number }> {
+  const runs = await listRecentRunsWithIds(30);
+  const pending = runs.filter((r) => r.status === 'queued' || r.status === 'pending');
+
+  let cancelled = 0;
+  let failed = 0;
+
+  for (const run of pending) {
+    try {
+      const res = await api(`/actions/runs/${run.id}/cancel`, { method: 'POST' });
+      if (res.ok || res.status === 202) cancelled++;
+      else failed++;
+    } catch {
+      failed++;
+    }
+  }
+
+  return { cancelled, failed };
+}
+
+async function listRecentRunsWithIds(limit: number): Promise<{ id: number; status: string }[]> {
+  const res = await api(`/actions/runs?per_page=${limit}`);
+  if (!res.ok) throw new Error(explainStatus(res.status));
+
+  const json: any = await res.json();
+  return (json?.workflow_runs ?? []).map((r: any) => ({
+    id: Number(r?.id),
+    status: String(r?.status ?? ''),
+  }));
+}
+
 /** Ultimas execucoes, para diagnosticar sem sair do painel. */
 export async function listRecentRuns(limit = 5): Promise<WorkflowRun[]> {
   const res = await api(`/actions/runs?per_page=${limit}`);
