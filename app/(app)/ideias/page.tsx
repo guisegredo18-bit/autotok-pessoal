@@ -7,6 +7,9 @@ import { EmptyState, PageHeader, ScorePill, timeAgo } from '@/components/ui';
 import { approveIdeaAction, rejectIdeaAction } from '@/app/actions';
 
 export const dynamic = 'force-dynamic';
+// Escrever os roteiros acontece dentro da requisicao desta tela; o padrao de
+// 10s da Vercel cortaria a geracao no meio.
+export const maxDuration = 60;
 
 export default async function IdeasPage() {
   const rows = await db

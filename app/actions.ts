@@ -159,24 +159,38 @@ export async function generateIdeasAction(
     await guard();
     const topic = String(form.get('topic') ?? '').trim();
 
-    // Gerar roteiro leva dezenas de segundos e estoura o limite de tempo de
-    // funcao serverless. Quando o GitHub Actions esta configurado, mandamos
-    // para la; senao rodamos aqui mesmo e torcemos pelo timeout do host.
-    if (!topic && canDispatch()) {
-      await dispatch('generate-ideas');
-      return { ok: true, message: 'Geracao iniciada no GitHub Actions. Atualize em ~1 minuto.' };
-    }
-
+    /**
+     * Geramos aqui mesmo, e nao no GitHub Actions.
+     *
+     * Delegar parecia mais seguro por causa do tempo, mas na pratica deixava
+     * voce olhando "atualize em ~1 minuto" sem nunca ver resultado quando o
+     * job falhava — e sem nenhuma pista do motivo. Agora os roteiros sao
+     * escritos em paralelo, o lote cabe numa requisicao, e o erro (se houver)
+     * aparece na tela.
+     */
     const result = topic
       ? await generateIdeasForTopic(topic)
       : await generateIdeasFromTrends();
 
     revalidatePath('/ideias');
+    revalidatePath('/');
+
+    if (result.created === 0) {
+      return {
+        ok: false,
+        message:
+          result.discarded > 0
+            ? `${result.discarded} ideia(s) foram descartadas por ficarem abaixo da nota minima. ` +
+              'Baixe a nota minima em Configuracoes ou tente outro assunto.'
+            : 'Nenhuma ideia foi criada.',
+      };
+    }
+
     return {
       ok: true,
       message: `${result.created} ideia(s) criada(s)${
         result.discarded > 0 ? `, ${result.discarded} descartada(s) por nota baixa` : ''
-      }.`,
+      }. Veja abaixo.`,
     };
   } catch (err) {
     return fail(err);

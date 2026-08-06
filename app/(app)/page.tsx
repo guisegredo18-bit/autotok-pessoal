@@ -11,6 +11,8 @@ import { generateFromTrendsAction } from '@/app/actions';
 import { runningCommit } from '@/lib/version';
 
 export const dynamic = 'force-dynamic';
+// O botao "Gerar ideias" tambem vive aqui, e a geracao roda na requisicao.
+export const maxDuration = 60;
 
 async function count(table: any, where: any): Promise<number> {
   const [row] = await db.select({ n: sql<number>`count(*)::int` }).from(table).where(where);
