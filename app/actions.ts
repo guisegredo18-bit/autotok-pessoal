@@ -82,6 +82,12 @@ export async function scanAction(): Promise<ActionState> {
     revalidatePath('/tendencias');
     revalidatePath('/');
 
+    // Acesso fechado pelo TikTok nao e erro da aplicacao: a mensagem diz o
+    // que aconteceu e para onde ir, sem despejar diagnostico tecnico.
+    if (result.blocked) {
+      return { ok: false, message: result.warnings[0] };
+    }
+
     const base = `${result.fetched} tendencias lidas — ${result.inserted} novas, ${result.updated} atualizadas.`;
     return {
       ok: result.fetched > 0,

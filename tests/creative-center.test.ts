@@ -1,6 +1,6 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { findList, describeResponse, toTrend } from '@/lib/trends/creative-center';
+import { findList, describeResponse, toTrend, isBlocked } from '@/lib/trends/creative-center';
 
 /**
  * O Creative Center nao tem contrato publico e ja mudou de formato em
@@ -57,6 +57,26 @@ describe('describeResponse', () => {
   test('nao confunde sucesso (code=0) com erro', () => {
     const texto = describeResponse({ code: 0, data: { total: 0 } });
     assert.ok(!texto.includes('code=0'));
+  });
+});
+
+describe('isBlocked', () => {
+  test('reconhece o code 40101 que o TikTok passou a devolver', () => {
+    // Foi o que aconteceu em producao: o endereco certo, mas acesso fechado.
+    // Confundir isso com "formato mudou" leva a procurar bug onde nao ha.
+    assert.equal(isBlocked({ code: 40101, msg: 'no permission' }), true);
+    assert.equal(isBlocked({ code: 40100 }), true);
+  });
+
+  test('reconhece pela mensagem, mesmo com outro codigo', () => {
+    assert.equal(isBlocked({ code: 1, message: 'No permission to access' }), true);
+    assert.equal(isBlocked({ msg: 'Unauthorized' }), true);
+  });
+
+  test('nao confunde resposta boa com bloqueio', () => {
+    assert.equal(isBlocked({ code: 0, data: { list: [{ a: 1 }] } }), false);
+    assert.equal(isBlocked({ data: { list: [] } }), false);
+    assert.equal(isBlocked({}), false);
   });
 });
 

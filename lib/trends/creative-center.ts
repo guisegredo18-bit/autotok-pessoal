@@ -40,7 +40,24 @@ function headers(referer: string): Record<string, string> {
   };
 }
 
-type Attempt = { url: string; status?: number; problem: string };
+type Attempt = { url: string; status?: number; problem: string; blocked?: boolean };
+
+/**
+ * O TikTok passou a exigir permissao nessa API.
+ *
+ * Em agosto de 2026 o endereco de hashtags — que respondia sem login — passou
+ * a devolver `code=40101 (no permission)`. Nao e caminho errado nem formato
+ * novo: e acesso fechado. Insistir em variacoes de URL nao resolve, entao
+ * detectamos o caso para dizer a verdade ao usuario em vez de exibir um
+ * paredao de erros que sugere um bug nosso.
+ */
+export function isBlocked(json: any): boolean {
+  const code = Number(json?.code ?? json?.status_code);
+  if (code === 40101 || code === 40100) return true;
+
+  const message = String(json?.msg ?? json?.message ?? '').toLowerCase();
+  return message.includes('no permission') || message.includes('unauthorized');
+}
 
 async function getJson(url: string, referer: string): Promise<any> {
   let lastError: unknown;
@@ -174,14 +191,27 @@ export class CreativeCenterProvider implements TrendProvider {
   readonly name = 'creative_center';
   /** Avisos da ultima coleta, exibidos no painel quando algo degrada. */
   warnings: string[] = [];
+  /** true quando o TikTok recusou por falta de permissao. */
+  blocked = false;
 
   async fetchTrends(query: TrendQuery): Promise<RawTrend[]> {
     this.warnings = [];
+    this.blocked = false;
 
     const [hashtags, sounds] = await Promise.all([
       this.collect('hashtag', query),
       this.collect('sound', query),
     ]);
+
+    // Bloqueio vale para a API inteira; um aviso basta, e repetir por tipo so
+    // faz a mensagem virar um paredao na tela do celular.
+    if (this.blocked) {
+      this.warnings = [
+        'O TikTok fechou o acesso publico a API de tendencias do Creative Center ' +
+          '(code 40101). A coleta automatica nao funciona mais — adicione as ' +
+          'tendencias que voce ver no TikTok pela tela Trends.',
+      ];
+    }
 
     return [...hashtags, ...sounds];
   }
@@ -201,12 +231,10 @@ export class CreativeCenterProvider implements TrendProvider {
         ? [
             `${BASE}/popular_trend/hashtag/list?${common}&sort_by=popular`,
             `${BASE}/trending/hashtag/list?${common}&sort_by=popular`,
-            `${BASE}/popular_trend/hashtag?${common}&sort_by=popular`,
           ]
         : [
             `${BASE}/popular_trend/song/list?${common}&rank_type=popular`,
             `${BASE}/popular_trend/music/list?${common}&rank_type=popular`,
-            `${BASE}/trending/song/list?${common}&rank_type=popular`,
           ];
 
     const attempts: Attempt[] = [];
@@ -214,8 +242,14 @@ export class CreativeCenterProvider implements TrendProvider {
     for (const url of candidates) {
       try {
         const json = await getJson(url, REFERERS[kind]);
-        const list = findList(json);
 
+        if (isBlocked(json)) {
+          attempts.push({ url, problem: describeResponse(json), blocked: true });
+          // Acesso fechado vale para toda a API, nao so para este endereco.
+          break;
+        }
+
+        const list = findList(json);
         if (!list) {
           attempts.push({ url, problem: describeResponse(json) });
           continue;
@@ -235,9 +269,21 @@ export class CreativeCenterProvider implements TrendProvider {
       }
     }
 
-    // Nenhum candidato serviu: registramos o diagnostico completo, porque e
-    // essa informacao — e nao "deu erro" — que permite consertar depois.
     const label = kind === 'hashtag' ? 'hashtags' : 'sons';
+
+    // Acesso fechado nao e defeito a investigar: e uma decisao do TikTok. A
+    // mensagem entao diz o que fazer, em vez de despejar URLs e codigos.
+    if (attempts.some((a) => a.blocked)) {
+      this.blocked = true;
+      this.warnings.push(
+        `${label}: o TikTok fechou o acesso publico a esta API (code 40101). ` +
+          'Use "Adicionar do que voce viu no TikTok" na tela Trends.',
+      );
+      return [];
+    }
+
+    // Nos demais casos, registramos o diagnostico completo — e essa
+    // informacao, e nao "deu erro", que permite consertar depois.
     const detail = attempts
       .map((a) => `${new URL(a.url).pathname} → ${a.problem}`)
       .join(' | ');

@@ -59,13 +59,23 @@ Três limitações reais, para não haver surpresa:
    (gratuita, feita no portal de desenvolvedores), o post vira 100% automático.
    O código já cobre os dois casos — o painel avisa em qual você está.
 
-2. **As tendências vêm do Creative Center, que não é uma API oficial.** A API
-   oficial de pesquisa do TikTok é liberada só para pesquisadores acadêmicos. O
-   Creative Center é a vitrine pública de tendências e responde sem login, mas
-   o TikTok pode mudar o formato a qualquer momento. O código é defensivo: se a
-   coleta falhar, ele avisa em vez de quebrar, e o resto continua funcionando
-   (você pode gerar ideias digitando um assunto). Se um dia parar de responder,
-   o ajuste fica em `lib/trends/creative-center.ts`.
+2. **A coleta automática de tendências não funciona mais.** A API oficial de
+   pesquisa do TikTok é liberada só para pesquisadores acadêmicos, e o Creative
+   Center — a vitrine pública que respondia sem login — passou a devolver
+   `code=40101 (no permission)` em agosto de 2026. O acesso foi fechado pelo
+   TikTok; não é caminho errado nem formato novo, então não há conserto por
+   tentativa de outro endereço.
+
+   **Isso não impede o app de funcionar.** Você tem duas saídas, ambas no
+   painel: em **Trends**, *Adicionar do que você viu no TikTok* (abre o app,
+   vê o que está bombando, digita); ou em **Ideias**, escrever um assunto no
+   campo livre. O botão *Gerar ideias* também funciona sem nenhuma tendência —
+   nesse caso o roteiro sai do seu nicho.
+
+   Se quiser coleta automática de volta, existem provedores pagos de dados do
+   TikTok (EnsembleData, Apify, ~US$20–100/mês). A interface `TrendProvider`
+   em `lib/trends/types.ts` foi feita para isso: dá para plugar um novo
+   provedor sem tocar no resto.
 
 3. **Vídeo automático não substitui julgamento.** A IA dá uma nota honesta a
    cada roteiro e você define a nota mínima. Ainda assim, assista antes de

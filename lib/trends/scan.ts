@@ -37,6 +37,8 @@ export type ScanResult = {
   inserted: number;
   updated: number;
   warnings: string[];
+  /** true quando o TikTok recusou por falta de permissao (nao e defeito nosso). */
+  blocked: boolean;
 };
 
 /** Varre as fontes, pontua e grava (upsert) as tendencias no banco. */
@@ -104,7 +106,13 @@ export async function scanTrends(query: TrendQuery): Promise<ScanResult> {
     }
   }
 
-  return { fetched: raw.length, inserted, updated, warnings: provider.warnings };
+  return {
+    fetched: raw.length,
+    inserted,
+    updated,
+    warnings: provider.warnings,
+    blocked: provider.blocked,
+  };
 }
 
 /** As melhores tendencias recentes, para alimentar a geracao de ideias. */

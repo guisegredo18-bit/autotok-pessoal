@@ -7,7 +7,7 @@ import { integrationStatus } from '@/lib/env';
 import { getAccount } from '@/lib/tiktok/account';
 import { ActionButton } from '@/components/action-button';
 import { PageHeader, StatusPill, compact, timeAgo } from '@/components/ui';
-import { scanAction, generateFromTrendsAction } from '@/app/actions';
+import { generateFromTrendsAction } from '@/app/actions';
 import { runningCommit } from '@/lib/version';
 
 export const dynamic = 'force-dynamic';
@@ -84,13 +84,18 @@ export default async function Dashboard() {
         <Stat label="Publicados" value={stats.publishedVideos} href="/fila" />
       </section>
 
+      {/* A busca automatica saiu daqui: o TikTok fechou o acesso publico a
+          essa API, e um botao que quase sempre falha nao merece o lugar mais
+          nobre da tela. Ele continua em Trends, ao lado do cadastro manual. */}
       <section className="mb-5 flex flex-col gap-3">
-        <ActionButton action={scanAction} className="btn-ghost">
-          Buscar tendencias agora
-        </ActionButton>
         <ActionButton action={generateFromTrendsAction} className="btn-primary">
-          Gerar ideias das tendencias
+          Gerar ideias
         </ActionButton>
+        {stats.trends === 0 && (
+          <Link href="/tendencias" className="btn-ghost">
+            Adicionar uma tendencia do TikTok
+          </Link>
+        )}
       </section>
 
       {stats.workingVideos > 0 && (
