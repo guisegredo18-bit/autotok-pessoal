@@ -1,6 +1,7 @@
 import { eq } from 'drizzle-orm';
 import { db } from './index';
 import { settings } from './schema';
+import { DEFAULT_RENDER_ENGINE, type RenderEngine } from '@/lib/render-engine';
 
 /** Preferencias de conteudo, editaveis pelo painel no iPhone. */
 export type AppSettings = {
@@ -38,7 +39,7 @@ export type AppSettings = {
    * capaz: melhor a fila parada de propria, e dizendo isso, do que um erro
    * inventado por tentar renderizar onde nao da.
    */
-  renderEngine: 'github' | 'aqui' | 'manual';
+  renderEngine: RenderEngine;
 };
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -52,7 +53,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   targetDuration: 30,
   captionSignature: '',
   blockedWords: [],
-  renderEngine: 'github',
+  renderEngine: DEFAULT_RENDER_ENGINE,
 };
 
 const KEY = 'app';

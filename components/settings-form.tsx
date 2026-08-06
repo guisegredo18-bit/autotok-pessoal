@@ -3,6 +3,7 @@
 import { useActionState } from 'react';
 import { saveSettingsAction, type ActionState } from '@/app/actions';
 import type { AppSettings } from '@/lib/db/settings';
+import { RENDER_ENGINES } from '@/lib/render-engine';
 
 export function SettingsForm({ settings }: { settings: AppSettings }) {
   const [state, formAction, pending] = useActionState<ActionState, FormData>(
@@ -140,9 +141,13 @@ export function SettingsForm({ settings }: { settings: AppSettings }) {
           className="field"
           defaultValue={settings.renderEngine}
         >
-          <option value="github">GitHub Actions</option>
-          <option value="aqui">Aqui mesmo (este servidor)</option>
-          <option value="manual">No Colab, quando eu mandar</option>
+          {/* Montado a partir da mesma lista que valida o envio: uma opcao
+              nova nao tem como aparecer aqui sem o servidor reconhece-la. */}
+          {Object.entries(RENDER_ENGINES).map(([valor, rotulo]) => (
+            <option key={valor} value={valor}>
+              {rotulo}
+            </option>
+          ))}
         </select>
         <p className="mt-1 text-[12px] leading-snug text-muted">
           &quot;Aqui mesmo&quot; exige um servidor com ffmpeg — a Vercel nao tem

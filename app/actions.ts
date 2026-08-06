@@ -6,6 +6,7 @@ import { eq, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { ideas, trends, videos } from '@/lib/db/schema';
 import { getSettings, saveSettings, type AppSettings } from '@/lib/db/settings';
+import { parseRenderEngine } from '@/lib/render-engine';
 import { prepareDatabase } from '@/lib/db/setup';
 import { hydrateEnv, saveSecrets, type SecretValues } from '@/lib/secrets';
 import { login, logout, requireAuth } from '@/lib/auth';
@@ -462,7 +463,7 @@ export async function saveSettingsAction(
       minScore: Math.max(0, Math.min(100, num('minScore', 60))),
       targetDuration: Math.max(10, Math.min(180, num('targetDuration', 30))),
       captionSignature: String(form.get('captionSignature') ?? '').trim(),
-      renderEngine: form.get('renderEngine') === 'aqui' ? 'aqui' : 'github',
+      renderEngine: parseRenderEngine(form.get('renderEngine')),
       blockedWords: String(form.get('blockedWords') ?? '')
         .split(',')
         .map((w) => w.trim())
