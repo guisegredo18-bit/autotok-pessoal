@@ -1,7 +1,7 @@
 name: Tendencias e ideias
 
-# Roda sozinho 3x por dia e tambem sob demanda (botao Run workflow, ou o
-# painel disparando repository_dispatch).
+# Roda sozinho 3x por dia e tambem sob demanda. Nao e o caminho principal:
+# gerar ideias tambem funciona direto no painel, com resposta imediata.
 on:
   schedule:
     # 06:00, 12:00 e 18:00 no horario de Brasilia (UTC-3).
@@ -27,17 +27,17 @@ jobs:
       APP_URL: ${{ vars.APP_URL }}
 
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
+      # Sem actions do marketplace: o servico que as resolve ja saiu do ar e
+      # derrubou execucoes. git clone depende so do proprio Git.
+      - name: Baixar o codigo
+        run: |
+          git clone --depth 1 --branch "${{ github.ref_name }}" \
+            "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" .
 
       - run: npm install --no-audit --no-fund
 
-      # A varredura pode falhar sozinha (o Creative Center e nao oficial) sem
-      # que isso impeca a geracao de ideias com as tendencias ja no banco.
+      # A coleta automatica depende do Creative Center, que o TikTok fechou.
+      # Falhar aqui nao pode impedir a geracao de ideias.
       - name: Buscar tendencias
         if: github.event.action != 'generate-ideas'
         continue-on-error: true

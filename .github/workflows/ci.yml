@@ -1,9 +1,10 @@
 name: CI
 
 on:
-  push:
-    branches: ['**']
   pull_request:
+  workflow_dispatch:
+  push:
+    branches: [main, master]
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -22,12 +23,12 @@ jobs:
       APP_URL: http://localhost:3000
 
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
+      # Sem actions do marketplace: quando o servico que as resolve sai do ar,
+      # todo workflow que depende delas para junto.
+      - name: Baixar o codigo
+        run: |
+          git clone --depth 1 --branch "${{ github.head_ref || github.ref_name }}" \
+            "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" .
 
       - run: npm install --no-audit --no-fund
 

@@ -14,9 +14,10 @@ on:
     - cron: '30 10 * * *'
 
 concurrency:
-  # Renderizar dois videos ao mesmo tempo brigaria por CPU no runner e deixaria
-  # os dois lentos; a fila espera.
-  group: render
+  # Um grupo por video: renderizar dois ao mesmo tempo apenas divide a CPU do
+  # runner, mas colocar todos no mesmo grupo fazia um disparo novo cancelar o
+  # anterior que ainda esperava vez — e o video ficava preso "na fila".
+  group: render-${{ github.event.client_payload.video_id || inputs.video_id || 'fila' }}
   cancel-in-progress: false
 
 jobs:
@@ -32,17 +33,19 @@ jobs:
       VIDEO_ID: ${{ github.event.client_payload.video_id || inputs.video_id }}
 
     steps:
-      - uses: actions/checkout@v4
+      # Sem actions/checkout de proposito. O servico que resolve actions do
+      # marketplace ja saiu do ar e derrubou renderizacoes ("Failed to resolve
+      # action download info"); um git clone depende so do proprio Git.
+      - name: Baixar o codigo
+        run: |
+          git clone --depth 1 --branch "${{ github.ref_name }}" \
+            "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" .
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-
-      # O runner do Ubuntu ja traz ffmpeg, mas a linha abaixo garante que ele
-      # exista mesmo se a imagem mudar.
-      - name: Garantir ffmpeg
-        run: ffmpeg -version || (sudo apt-get update && sudo apt-get install -y ffmpeg)
+      # O Node ja vem na imagem do runner, entao setup-node tambem e dispensavel.
+      - name: Conferir ambiente
+        run: |
+          node --version
+          ffmpeg -version >/dev/null 2>&1 || (sudo apt-get update && sudo apt-get install -y ffmpeg)
 
       - run: npm install --no-audit --no-fund
 

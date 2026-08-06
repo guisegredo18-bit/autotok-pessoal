@@ -13,7 +13,7 @@ on:
         required: true
 
 concurrency:
-  group: publish
+  group: publish-${{ github.event.client_payload.video_id || inputs.video_id }}
   cancel-in-progress: false
 
 jobs:
@@ -28,12 +28,12 @@ jobs:
       VIDEO_ID: ${{ github.event.client_payload.video_id || inputs.video_id }}
 
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
+      # Sem actions do marketplace: o servico que as resolve ja saiu do ar e
+      # derrubou execucoes. git clone depende so do proprio Git.
+      - name: Baixar o codigo
+        run: |
+          git clone --depth 1 --branch "${{ github.ref_name }}" \
+            "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" .
 
       - run: npm install --no-audit --no-fund
 
