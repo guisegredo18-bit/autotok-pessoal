@@ -88,6 +88,35 @@ export type WorkflowRun = {
   url: string;
 };
 
+/**
+ * Um job parado em "queued" nao esta rodando devagar: e um job para o qual o
+ * GitHub nunca entregou uma maquina. Depois de alguns minutos, isso quase
+ * sempre significa franquia de minutos esgotada — e e uma informacao que so
+ * aparece na pagina de faturamento, longe de quem usa o app pelo celular.
+ */
+const STUCK_AFTER_MS = 5 * 60_000;
+
+export type QueueHealth = {
+  waiting: number;
+  /** Ha quantos minutos o mais antigo espera. */
+  oldestMinutes: number;
+  stuck: boolean;
+};
+
+export function queueHealth(runs: WorkflowRun[]): QueueHealth {
+  const waiting = runs.filter((r) => r.status === 'queued' || r.status === 'pending');
+  if (waiting.length === 0) return { waiting: 0, oldestMinutes: 0, stuck: false };
+
+  const oldest = Math.min(...waiting.map((r) => new Date(r.createdAt).getTime()));
+  const ageMs = Date.now() - oldest;
+
+  return {
+    waiting: waiting.length,
+    oldestMinutes: Math.floor(ageMs / 60_000),
+    stuck: ageMs > STUCK_AFTER_MS,
+  };
+}
+
 /** Ultimas execucoes, para diagnosticar sem sair do painel. */
 export async function listRecentRuns(limit = 5): Promise<WorkflowRun[]> {
   const res = await api(`/actions/runs?per_page=${limit}`);

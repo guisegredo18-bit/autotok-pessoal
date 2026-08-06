@@ -14,7 +14,7 @@ import { generateIdeasFromTrends, generateIdeasForTopic } from '@/lib/pipeline/i
 import { enqueueRender, renderQueuedVideo } from '@/lib/pipeline/render';
 import { publishVideo } from '@/lib/pipeline/publish';
 import { canDispatch, dispatch } from '@/lib/dispatch';
-import { putSecret } from '@/lib/github/repo';
+import { listRecentRuns, putSecret, queueHealth } from '@/lib/github/repo';
 import { disconnectAccount } from '@/lib/tiktok/account';
 import { env } from '@/lib/env';
 
@@ -310,6 +310,23 @@ export async function rejectVideoAction(videoId: string): Promise<ActionState> {
 export async function retryVideoAction(videoId: string): Promise<ActionState> {
   try {
     await guard();
+
+    // Reenviar enquanto a fila do GitHub esta travada so empilha jobs que
+    // ninguem vai executar — e foi o que aconteceu: sete disparos parados
+    // para o mesmo video. Melhor dizer a verdade do que fingir que tentou.
+    if (canDispatch()) {
+      const health = queueHealth(await listRecentRuns(10).catch(() => []));
+      if (health.stuck) {
+        return {
+          ok: false,
+          message:
+            `Ja ha ${health.waiting} execucao(oes) parada(s) na fila do GitHub, a mais antiga ha ` +
+            `${health.oldestMinutes} minutos, sem receber maquina. Reenviar so aumenta a fila. ` +
+            'Isso costuma ser franquia de minutos esgotada — veja Configuracoes > Renderizacao.',
+        };
+      }
+    }
+
     await db
       .update(videos)
       .set({ status: 'queued', error: null })

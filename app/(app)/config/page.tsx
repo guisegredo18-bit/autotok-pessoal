@@ -9,7 +9,7 @@ import { hydrateEnv, secretsForForm, secretsHealth, secretsStatus } from '@/lib/
 import { checkVersion } from '@/lib/version';
 import { PageHeader } from '@/components/ui';
 import { disconnectTikTokAction, logoutAction, setupGithubSecretsAction } from '@/app/actions';
-import { listRecentRuns, listSecretNames } from '@/lib/github/repo';
+import { listRecentRuns, listSecretNames, queueHealth } from '@/lib/github/repo';
 
 export const dynamic = 'force-dynamic';
 
@@ -32,16 +32,23 @@ const CHECKS: { key: keyof ReturnType<typeof integrationStatus>; label: string; 
  * conserta o token.
  */
 async function githubStatus() {
+  const vazio = { waiting: 0, oldestMinutes: 0, stuck: false };
   if (!env.githubToken || !env.githubRepo) {
-    return { secrets: [] as string[], runs: [], error: 'token do GitHub nao configurado' };
+    return {
+      secrets: [] as string[],
+      runs: [] as Awaited<ReturnType<typeof listRecentRuns>>,
+      queue: vazio,
+      error: 'token do GitHub nao configurado',
+    };
   }
   try {
-    const [secrets, runs] = await Promise.all([listSecretNames(), listRecentRuns(5)]);
-    return { secrets, runs, error: null as string | null };
+    const [secrets, runs] = await Promise.all([listSecretNames(), listRecentRuns(10)]);
+    return { secrets, runs, queue: queueHealth(runs), error: null as string | null };
   } catch (err) {
     return {
       secrets: [] as string[],
       runs: [] as Awaited<ReturnType<typeof listRecentRuns>>,
+      queue: vazio,
       error: err instanceof Error ? err.message : String(err),
     };
   }
@@ -220,6 +227,29 @@ export default async function ConfigPage() {
                 </li>
               ))}
             </ul>
+          )}
+
+          {/* Franquia esgotada nao produz erro: o job fica esperando uma
+              maquina que nunca vem. Sem este aviso, a unica pista seria a
+              pagina de faturamento do GitHub — longe de quem usa pelo celular. */}
+          {github.queue.stuck && (
+            <div className="rounded-xl border border-red-900/60 bg-red-950/30 p-3">
+              <p className="text-[13px] font-semibold text-red-300">
+                {github.queue.waiting} execucao(oes) parada(s) na fila
+              </p>
+              <p className="mt-1.5 text-[13px] leading-snug text-red-200/85">
+                A mais antiga espera ha {github.queue.oldestMinutes} minutos sem
+                receber maquina. Isso quase sempre e a franquia mensal de minutos
+                do GitHub Actions esgotada.
+              </p>
+              <p className="mt-2 text-[13px] leading-snug text-red-200/85">
+                A saida gratuita e tornar o repositorio <strong>publico</strong>:
+                em repositorios publicos o Actions e ilimitado. Seus secrets
+                continuam privados. Em{' '}
+                <code>github.com/{env.githubRepo}/settings</code>, ao final da
+                pagina, em <em>Change repository visibility</em>.
+              </p>
+            </div>
           )}
 
           <ActionButton action={setupGithubSecretsAction} className="btn-primary">
