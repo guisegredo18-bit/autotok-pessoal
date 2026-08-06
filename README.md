@@ -443,9 +443,18 @@ banco desatualizado.
 
 ## Problemas comuns
 
-**"Nenhuma tendência retornada"** — o Creative Center mudou o formato ou está
-bloqueando. Enquanto isso, gere ideias digitando um assunto no campo livre da
-tela **Ideias**.
+**"Nenhum endereço funcionou" na busca de tendências** — o Creative Center é
+uma fonte não oficial e muda sem aviso. **Isso não trava o app**, você tem três
+saídas:
+
+1. Em **Trends**, use *Adicionar do que você viu no TikTok* — digite a hashtag
+   e siga normalmente.
+2. Em **Ideias**, escreva um assunto no campo livre.
+3. Toque em **Gerar ideias das tendências** mesmo assim: sem tendências no
+   banco, o roteiro sai a partir do nicho configurado.
+
+O aviso mostra o que cada endereço respondeu (código de erro ou os campos que
+vieram) — é essa informação que permite corrigir o coletor.
 
 **Vídeo saiu com fundo liso** — falta `PEXELS_API_KEY`, ou o termo de busca da
 cena não encontrou nada. O aviso aparece no card do vídeo.

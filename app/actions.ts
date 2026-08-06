@@ -4,8 +4,8 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { ideas, videos } from '@/lib/db/schema';
-import { saveSettings, type AppSettings } from '@/lib/db/settings';
+import { ideas, trends, videos } from '@/lib/db/schema';
+import { getSettings, saveSettings, type AppSettings } from '@/lib/db/settings';
 import { prepareDatabase } from '@/lib/db/setup';
 import { hydrateEnv, saveSecrets, type SecretValues } from '@/lib/secrets';
 import { login, logout, requireAuth } from '@/lib/auth';
@@ -90,6 +90,56 @@ export async function scanAction(): Promise<ActionState> {
           ? `${base} Avisos: ${result.warnings.join('; ')}`
           : base,
     };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+/**
+ * Cadastra uma tendencia na mao.
+ *
+ * O Creative Center e fonte nao oficial e sai do ar. Este caminho garante que
+ * voce nunca fique bloqueado: abre o TikTok, ve o que esta bombando, digita
+ * aqui, e a geracao de roteiros segue normal.
+ */
+export async function addTrendAction(
+  _prev: ActionState,
+  form: FormData,
+): Promise<ActionState> {
+  try {
+    await guard();
+
+    const name = String(form.get('name') ?? '')
+      .trim()
+      .replace(/^#/, '');
+    if (!name) return { ok: false, message: 'Escreva a hashtag ou o assunto.' };
+
+    const kind = String(form.get('kind') ?? 'hashtag');
+    const settings = await getSettings();
+    const now = new Date();
+
+    await db
+      .insert(trends)
+      .values({
+        source: 'manual',
+        kind,
+        name,
+        country: settings.country,
+        // Nota alta de proposito: se voce digitou, e porque viu que esta
+        // bombando — essa observacao vale mais que qualquer estimativa nossa.
+        score: 85,
+        history: [{ at: now.toISOString(), score: 85 }],
+        firstSeenAt: now,
+        lastSeenAt: now,
+      })
+      .onConflictDoUpdate({
+        target: [trends.source, trends.kind, trends.name, trends.country],
+        set: { lastSeenAt: now, score: 85 },
+      });
+
+    revalidatePath('/tendencias');
+    revalidatePath('/');
+    return { ok: true, message: `"${name}" adicionada. Agora gere as ideias.` };
   } catch (err) {
     return fail(err);
   }

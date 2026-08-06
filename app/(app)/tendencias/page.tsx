@@ -2,6 +2,7 @@ import { sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { trends } from '@/lib/db/schema';
 import { ActionButton } from '@/components/action-button';
+import { AddTrendForm } from '@/components/add-trend-form';
 import { EmptyState, PageHeader, ScorePill, compact, timeAgo } from '@/components/ui';
 import { scanAction } from '@/app/actions';
 
@@ -29,16 +30,20 @@ export default async function TrendsPage() {
         subtitle="Do TikTok Creative Center. Nota alta = volume bom com crescimento."
       />
 
+      <AddTrendForm />
+
       <div className="mb-5">
         <ActionButton action={scanAction} className="btn-ghost w-full">
-          Atualizar tendencias
+          Buscar automaticamente
         </ActionButton>
       </div>
 
       {rows.length === 0 ? (
         <EmptyState
           title="Nenhuma tendencia ainda"
-          description="Toque em Atualizar tendencias para buscar as hashtags e sons em alta no seu pais."
+          description="Adicione uma que voce viu no TikTok, ou tente a busca automatica. Se as duas falharem, voce ainda pode gerar ideias digitando um assunto na tela Ideias."
+          href="/ideias"
+          cta="Ir para Ideias"
         />
       ) : (
         <ul className="flex flex-col gap-2">
