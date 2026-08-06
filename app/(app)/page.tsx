@@ -8,6 +8,7 @@ import { getAccount } from '@/lib/tiktok/account';
 import { ActionButton } from '@/components/action-button';
 import { PageHeader, StatusPill, compact, timeAgo } from '@/components/ui';
 import { scanAction, generateFromTrendsAction } from '@/app/actions';
+import { runningCommit } from '@/lib/version';
 
 export const dynamic = 'force-dynamic';
 
@@ -174,7 +175,23 @@ export default async function Dashboard() {
           </ul>
         </section>
       )}
+
+      <VersionFooter />
     </>
+  );
+}
+
+/**
+ * Versao no rodape, sem consultar o GitHub — a comparacao com o repositorio
+ * fica em Configuracoes. Aqui e so para dar uma resposta imediata a pergunta
+ * "sera que o deploy pegou?".
+ */
+function VersionFooter() {
+  const commit = runningCommit();
+  return (
+    <p className="mt-6 text-center text-[11px] text-muted">
+      versao {commit || 'local'}
+    </p>
   );
 }
 

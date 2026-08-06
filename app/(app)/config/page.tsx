@@ -6,6 +6,7 @@ import { ActionButton } from '@/components/action-button';
 import { SettingsForm } from '@/components/settings-form';
 import { SecretsForm } from '@/components/secrets-form';
 import { hydrateEnv, secretsForForm, secretsHealth, secretsStatus } from '@/lib/secrets';
+import { checkVersion } from '@/lib/version';
 import { PageHeader } from '@/components/ui';
 import { disconnectTikTokAction, logoutAction } from '@/app/actions';
 
@@ -27,12 +28,13 @@ export default async function ConfigPage() {
   // resumo mostraria como faltando algo que ja esta configurado.
   await hydrateEnv(true);
 
-  const [settings, account, secretValues, filled, health] = await Promise.all([
+  const [settings, account, secretValues, filled, health, version] = await Promise.all([
     getSettings(),
     getAccount().catch(() => null),
     secretsForForm(),
     secretsStatus(),
     secretsHealth(),
+    checkVersion(),
   ]);
   const status = integrationStatus();
 
@@ -160,6 +162,35 @@ export default async function ConfigPage() {
           </div>
         )}
         <SecretsForm values={secretValues} filled={filled} />
+      </section>
+
+      <section className="mb-5">
+        <h2 className="mb-2 text-[13px] font-semibold uppercase tracking-wide text-muted">
+          Versao
+        </h2>
+
+        {version.outdated ? (
+          <div className="card border-amber-900/60 bg-amber-950/30">
+            <p className="text-[14px] font-semibold text-amber-300">
+              Ha uma versao mais nova esperando deploy
+            </p>
+            <p className="mt-1.5 text-[13px] leading-snug text-amber-200/85">
+              No ar: <code>{version.commit}</code> · disponivel:{' '}
+              <code>{version.latest}</code>. Correcoes que ja estao no
+              repositorio ainda nao chegaram aqui.
+            </p>
+            <p className="mt-2 text-[13px] leading-snug text-amber-200/85">
+              Na Vercel, abra o projeto → <strong>Deployments</strong> → nos tres
+              pontinhos do deploy mais recente → <strong>Redeploy</strong>.
+            </p>
+          </div>
+        ) : (
+          <p className="px-1 text-[12px] leading-snug text-muted">
+            No ar: <code>{version.commit || 'desenvolvimento local'}</code>
+            {version.branch && ` · ${version.branch}`}
+            {version.note && ` · ${version.note}`}
+          </p>
+        )}
       </section>
 
       <form action={logoutAction}>
