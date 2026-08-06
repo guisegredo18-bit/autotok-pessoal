@@ -196,17 +196,21 @@ de graça, sem cartão, e dá para criar tudo pelo Safari do iPhone.
    `Dockerfile` → cole o conteúdo de
    [`deploy/huggingface/Dockerfile`](deploy/huggingface/Dockerfile) deste
    repositório → **Commit**.
-3. Em **Settings → Variables and secrets**, adicione como *Secret*:
+3. Em **Settings → Variables and secrets**, adicione como *Secret* apenas
    `DATABASE_URL` e `AUTH_SECRET` — exatamente os mesmos valores do painel na
-   Vercel. Adicione também `APP_URL` com o endereço do Space
-   (`https://SEU-USUARIO-NOME-DO-SPACE.hf.space`).
-4. Espere o build (~5 min). Abra o Space, faça login com a sua senha.
-5. Em **Configurações → Conteúdo**, mude **Onde renderizar** para
-   **Aqui mesmo (este servidor)** e salve.
+   Vercel.
+4. Espere o build (~5 min). Abra o Space e faça login com a sua senha.
 
-Pronto: aprovar uma ideia renderiza no próprio Space, sem passar pelo GitHub.
-Os dois painéis (Vercel e Space) enxergam o mesmo banco, então a fila é a
-mesma — mas use o do Space, porque só ele consegue renderizar.
+E acabou. Não há passo 5: o app reconhece que está num Space e renderiza ali
+mesmo, e o endereço do painel sai do domínio do próprio Space — por isso
+`APP_URL` não precisa ser cadastrado.
+
+Aprovar uma ideia agora renderiza no próprio Space, sem passar pelo GitHub. Os
+dois painéis (Vercel e Space) enxergam o mesmo banco, então a fila é a mesma —
+mas aprove pelo do Space, porque só ele consegue renderizar. Se quiser que o
+painel da Vercel também pare de mandar trabalho para o GitHub, mude
+**Onde renderizar** para *aqui mesmo* em Configurações → Conteúdo: a escolha
+fica no banco e vale para os dois.
 
 > Para atualizar o código depois, o Space precisa reconstruir: **Settings →
 > Factory rebuild**. O `Dockerfile` clona o repositório no momento do build.

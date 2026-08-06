@@ -23,7 +23,23 @@ export function resolveAppUrl(source: EnvSource = process.env): string {
   const vercel = source.VERCEL_PROJECT_PRODUCTION_URL || source.VERCEL_URL;
   if (vercel) return `https://${vercel}`;
 
+  // O Hugging Face injeta o dominio do Space. Derivar dele poupa um secret —
+  // e um secret a menos e um endereco a menos para digitar errado no celular.
+  if (source.SPACE_HOST) return `https://${source.SPACE_HOST}`;
+
   return 'http://localhost:3000';
+}
+
+/**
+ * Se este processo roda num Space do Hugging Face.
+ *
+ * Importa porque um Space e um container de verdade: tem ffmpeg e nao tem
+ * limite de tempo de request. Quem sobe o painel la sobe justamente para
+ * renderizar — entao ele renderiza, sem depender de ninguem lembrar de mudar
+ * uma configuracao depois.
+ */
+export function isSpace(source: EnvSource = process.env): boolean {
+  return Boolean(source.SPACE_ID || source.SPACE_HOST);
 }
 
 /**

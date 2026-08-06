@@ -8,6 +8,10 @@
 #
 # O Space guarda so este arquivo. O codigo vem do repositorio publico no clone
 # abaixo, entao atualizar e reconstruir o Space (Settings > Factory rebuild).
+#
+# Os unicos secrets a cadastrar sao DATABASE_URL e AUTH_SECRET. O endereco do
+# painel sai do SPACE_HOST, que o proprio Hugging Face injeta, e a renderizacao
+# local e ligada sozinha por reconhecer o SPACE_ID.
 
 FROM node:20-bookworm-slim
 

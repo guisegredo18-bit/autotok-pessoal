@@ -21,7 +21,7 @@ import {
   queueHealth,
 } from '@/lib/github/repo';
 import { disconnectAccount } from '@/lib/tiktok/account';
-import { env } from '@/lib/env';
+import { env, isSpace } from '@/lib/env';
 
 /**
  * Server actions do painel.
@@ -228,6 +228,9 @@ export async function generateFromTrendsAction(): Promise<ActionState> {
  */
 async function usaGithub(): Promise<boolean> {
   if (!canDispatch()) return false;
+  // Num Space nao ha o que decidir: e um container com ffmpeg, e mandar o
+  // trabalho para fora seria devolve-lo justamente a quem nao o executa.
+  if (isSpace()) return false;
   const { renderEngine } = await getSettings();
   return renderEngine === 'github';
 }
