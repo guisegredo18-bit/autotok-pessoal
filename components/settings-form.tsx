@@ -142,11 +142,13 @@ export function SettingsForm({ settings }: { settings: AppSettings }) {
         >
           <option value="github">GitHub Actions</option>
           <option value="aqui">Aqui mesmo (este servidor)</option>
+          <option value="manual">No Colab, quando eu mandar</option>
         </select>
         <p className="mt-1 text-[12px] leading-snug text-muted">
-          &quot;Aqui mesmo&quot; so funciona se o painel estiver num container
-          com ffmpeg — na Vercel nao ha ffmpeg nem tempo de request suficiente.
-          Escolha esta opcao se o Actions parar de receber maquina.
+          &quot;Aqui mesmo&quot; exige um servidor com ffmpeg — a Vercel nao tem
+          ffmpeg nem tempo de request suficiente. Se o Actions parou de receber
+          maquina, escolha <strong>Colab</strong>: o video espera na fila e voce
+          renderiza abrindo o caderno pelo celular.
         </p>
       </div>
 

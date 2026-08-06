@@ -21,7 +21,7 @@ import {
   queueHealth,
 } from '@/lib/github/repo';
 import { disconnectAccount } from '@/lib/tiktok/account';
-import { env, isSpace } from '@/lib/env';
+import { env } from '@/lib/env';
 
 /**
  * Server actions do painel.
@@ -209,6 +209,21 @@ export async function generateFromTrendsAction(): Promise<ActionState> {
 }
 
 /**
+ * Qual motor de renderizacao esta valendo.
+ *
+ * Sem token nao ha para onde despachar, entao a preferencia por `github` nao
+ * se sustenta e vira `manual` — deixar o video esperando e mais honesto do que
+ * tentar renderizar onde talvez nao haja ffmpeg. A preferencia existe para
+ * trocar de motor sem apagar o token: o mesmo token continua servindo para
+ * cadastrar secrets e diagnosticar a fila do Actions.
+ */
+async function motorDeRender(): Promise<AppSettings['renderEngine']> {
+  const { renderEngine } = await getSettings();
+  if (renderEngine === 'github' && !canDispatch()) return 'manual';
+  return renderEngine;
+}
+
+/**
  * Manda o video para a renderizacao — e registra na propria linha quando o
  * disparo nao foi aceito.
  *
@@ -218,29 +233,18 @@ export async function generateFromTrendsAction(): Promise<ActionState> {
  * trocar de aba. Gravando o erro na linha, a Fila mostra o motivo e o botao
  * de tentar de novo aparece.
  */
-/**
- * Se o trabalho pesado vai para o GitHub ou roda aqui mesmo.
- *
- * Duas condicoes: precisa haver token (senao nao ha para onde mandar) e a
- * preferencia precisa ser `github`. A preferencia existe para trocar de motor
- * sem apagar o token — o mesmo token continua servindo para cadastrar secrets
- * e para diagnosticar a fila do Actions.
- */
-async function usaGithub(): Promise<boolean> {
-  if (!canDispatch()) return false;
-  // Num Space nao ha o que decidir: e um container com ffmpeg, e mandar o
-  // trabalho para fora seria devolve-lo justamente a quem nao o executa.
-  if (isSpace()) return false;
-  const { renderEngine } = await getSettings();
-  return renderEngine === 'github';
-}
+async function requestRender(videoId: string): Promise<AppSettings['renderEngine']> {
+  const motor = await motorDeRender();
 
-async function requestRender(videoId: string): Promise<void> {
-  if (!(await usaGithub())) {
-    // Sem GitHub Actions o render roda aqui. Vai demorar; o `void` evita
-    // segurar a resposta, e o status no banco conta o resto da historia.
+  // `manual` nao chama ninguem de proposito: o video fica em "na fila" ate
+  // alguem com uma maquina — o caderno do Colab, um terminal — pegar a fila.
+  if (motor === 'manual') return motor;
+
+  if (motor === 'aqui') {
+    // Vai demorar; o `void` evita segurar a resposta, e o status no banco
+    // conta o resto da historia.
     void renderQueuedVideo(videoId).catch((err) => console.error(err));
-    return;
+    return motor;
   }
 
   try {
@@ -253,17 +257,24 @@ async function requestRender(videoId: string): Promise<void> {
       .where(eq(videos.id, videoId));
     throw err;
   }
+  return motor;
 }
 
 export async function approveIdeaAction(ideaId: string): Promise<ActionState> {
   try {
     await guard();
     const videoId = await enqueueRender(ideaId);
-    await requestRender(videoId);
+    const motor = await requestRender(videoId);
 
     revalidatePath('/ideias');
     revalidatePath('/fila');
-    return { ok: true, message: 'Video entrou na fila de renderizacao.' };
+    return {
+      ok: true,
+      message:
+        motor === 'manual'
+          ? 'Video na fila. Ele sera renderizado quando voce rodar o caderno do Colab.'
+          : 'Video entrou na fila de renderizacao.',
+    };
   } catch (err) {
     return fail(err);
   }
@@ -286,7 +297,7 @@ export async function publishVideoAction(videoId: string): Promise<ActionState> 
   try {
     await guard();
 
-    if (await usaGithub()) {
+    if ((await motorDeRender()) === 'github') {
       await db.update(videos).set({ status: 'publishing' }).where(eq(videos.id, videoId));
       await dispatch('publish-video', { video_id: videoId });
       revalidatePath('/fila');
@@ -402,7 +413,7 @@ export async function retryVideoAction(videoId: string): Promise<ActionState> {
     // Reenviar enquanto a fila do GitHub esta travada so empilha jobs que
     // ninguem vai executar — e foi o que aconteceu: sete disparos parados
     // para o mesmo video. Melhor dizer a verdade do que fingir que tentou.
-    if (await usaGithub()) {
+    if ((await motorDeRender()) === 'github') {
       const health = queueHealth(await listRecentRuns(10).catch(() => []));
       if (health.stuck) {
         return {

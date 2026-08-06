@@ -23,15 +23,22 @@ export type AppSettings = {
   /** Palavras que nunca devem aparecer no roteiro. */
   blockedWords: string[];
   /**
-   * Onde os videos sao renderizados e publicados.
+   * Onde os videos sao renderizados.
    *
    * `github` manda o trabalho pesado para o Actions e mantem o painel leve —
    * o que so funciona enquanto a conta recebe runner. Quando nao recebe, o job
-   * fica em "queued" para sempre e nao ha erro para mostrar. `aqui` roda no
-   * proprio processo do painel: serve quando ele esta num container de
-   * verdade, com ffmpeg e sem limite de tempo de request.
+   * fica em "queued" para sempre e nao ha erro para mostrar.
+   *
+   * `aqui` roda no proprio processo do painel: serve quando ele esta num
+   * container de verdade, com ffmpeg e sem limite de tempo de request.
+   *
+   * `manual` nao renderiza nada — deixa o video esperando para quem chegar
+   * depois com uma maquina (o caderno do Colab, ou `npm run queue` num
+   * terminal). E a unica opcao honesta quando nao existe nenhum servidor
+   * capaz: melhor a fila parada de propria, e dizendo isso, do que um erro
+   * inventado por tentar renderizar onde nao da.
    */
-  renderEngine: 'github' | 'aqui';
+  renderEngine: 'github' | 'aqui' | 'manual';
 };
 
 export const DEFAULT_SETTINGS: AppSettings = {

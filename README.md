@@ -172,7 +172,7 @@ Agora aprove uma ideia: em poucos minutos o vídeo aparece na aba **Fila**.
 > entregando máquina para os seus jobs. A Fila avisa quando isso acontece. A
 > saída está na etapa 4d.
 
-### Etapa 4d — quando o GitHub Actions não entrega máquina (~15 min)
+### Etapa 4d — quando o GitHub Actions não entrega máquina (~5 min)
 
 Às vezes o job é criado e nenhum runner assume: ele fica em `queued` para
 sempre, sem erro nenhum — porque nada chegou a rodar. Duas causas:
@@ -182,38 +182,33 @@ sempre, sem erro nenhum — porque nada chegou a rodar. Duas causas:
   página, *Change repository visibility*). Em repositório público o Actions é
   ilimitado e os secrets continuam privados.
 - **Actions bloqueado na conta inteira.** Acontece mesmo com repositório
-  público, e não há nada a consertar do lado do app.
+  público. Confira em [github.com/settings/billing](https://github.com/settings/billing)
+  o número de **minutos usados** — não é a mesma coisa que pendência de
+  pagamento, e é o que costuma estar estourado. Se estiver, o acesso volta na
+  virada do ciclo de faturamento; se não estiver, abra um chamado em
+  [support.github.com](https://support.github.com) pedindo a liberação.
 
-No segundo caso, tire o GitHub do caminho: rode o painel inteiro num container
-com ffmpeg, e ele mesmo renderiza. O **Hugging Face Spaces** dá 2 vCPU e 16 GB
-de graça, sem cartão, e dá para criar tudo pelo Safari do iPhone.
+Enquanto isso não se resolve, renderize no **Google Colab**: é grátis, não pede
+cartão, roda no Safari do iPhone e usa a conta Google que você já tem.
 
-1. Em [huggingface.co](https://huggingface.co) crie a conta e vá em
-   **New Space**. Nome à sua escolha, SDK **Docker** (template *Blank*),
-   visibilidade **Public** — o Space público é o que é gratuito, e o painel
-   continua protegido pela sua senha.
-2. Na aba **Files** do Space → **Add file** → **Create a new file** → nome
-   `Dockerfile` → cole o conteúdo de
-   [`deploy/huggingface/Dockerfile`](deploy/huggingface/Dockerfile) deste
-   repositório → **Commit**.
-3. Em **Settings → Variables and secrets**, adicione como *Secret* apenas
-   `DATABASE_URL` e `AUTH_SECRET` — exatamente os mesmos valores do painel na
-   Vercel.
-4. Espere o build (~5 min). Abra o Space e faça login com a sua senha.
+1. No painel, em **Configurações → Conteúdo**, mude **Onde renderizar** para
+   **No Colab, quando eu mandar** e salve. Os vídeos passam a esperar na fila
+   em vez de serem despachados para um GitHub que não responde.
+2. Aprove as ideias normalmente. Na aba **Fila** aparece o botão
+   **Abrir o Colab**.
+3. No Colab, toque no ▶ da única célula. Ele pede `DATABASE_URL` e
+   `AUTH_SECRET` — os mesmos valores do painel na Vercel. Para não digitar toda
+   vez, cadastre os dois no cofre (ícone de chave 🔑 à esquerda, com *Notebook
+   access* ligado).
+4. Deixe a aba aberta. A primeira execução leva uns 5 minutos instalando Node e
+   dependências; as seguintes, menos. Quando terminar, os vídeos estão prontos
+   na **Fila** para aprovar e publicar.
 
-E acabou. Não há passo 5: o app reconhece que está num Space e renderiza ali
-mesmo, e o endereço do painel sai do domínio do próprio Space — por isso
-`APP_URL` não precisa ser cadastrado.
+O caderno está em [`deploy/colab/renderizar.ipynb`](deploy/colab/renderizar.ipynb).
+Ele renderiza tudo que está esperando e para sozinho quando a fila esvazia.
 
-Aprovar uma ideia agora renderiza no próprio Space, sem passar pelo GitHub. Os
-dois painéis (Vercel e Space) enxergam o mesmo banco, então a fila é a mesma —
-mas aprove pelo do Space, porque só ele consegue renderizar. Se quiser que o
-painel da Vercel também pare de mandar trabalho para o GitHub, mude
-**Onde renderizar** para *aqui mesmo* em Configurações → Conteúdo: a escolha
-fica no banco e vale para os dois.
-
-> Para atualizar o código depois, o Space precisa reconstruir: **Settings →
-> Factory rebuild**. O `Dockerfile` clona o repositório no momento do build.
+> Publicar no TikTok continua saindo do painel, sem Colab: publicar só envia o
+> arquivo já pronto, e isso cabe numa requisição da Vercel.
 
 ### Etapa 5 — conectar o TikTok (~10 min)
 
@@ -518,7 +513,8 @@ cena não encontrou nada. O aviso aparece no card do vídeo.
 **"ffmpeg não encontrado"** — o processo que renderiza não tem ffmpeg. Rodando
 local, instale-o. Se aparecer com **Onde renderizar: aqui mesmo**, é porque o
 painel está na Vercel, que não tem ffmpeg — essa opção só serve para o painel
-rodando em container (etapa 4d).
+rodando em container. Sem servidor próprio, use **No Colab, quando eu mandar**
+(etapa 4d).
 
 **Vídeo fica "na fila" e nunca renderiza** — o job existe no GitHub mas nenhum
 runner assumiu. A Fila mostra há quanto tempo. Reenviar não adianta: veja a

@@ -27,6 +27,7 @@ describe('AppSettings', () => {
 
   test('a escolha salva ganha do padrao', () => {
     assert.equal(merge({ renderEngine: 'aqui' }).renderEngine, 'aqui');
+    assert.equal(merge({ renderEngine: 'manual' }).renderEngine, 'manual');
   });
 
   test('mesclar preserva os campos que a linha nao traz', () => {

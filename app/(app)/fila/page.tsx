@@ -5,6 +5,8 @@ import { videos } from '@/lib/db/schema';
 import { env } from '@/lib/env';
 import { hydrateEnv } from '@/lib/secrets';
 import { listRecentRuns, queueHealth } from '@/lib/github/repo';
+import { getSettings } from '@/lib/db/settings';
+import { colabUrl } from '@/lib/colab';
 import { getAccount } from '@/lib/tiktok/account';
 import { ActionButton } from '@/components/action-button';
 import { AutoRefresh } from '@/components/auto-refresh';
@@ -60,9 +62,14 @@ export default async function QueuePage() {
     ['queued', 'rendering', 'failed'].includes(v.status),
   ).length;
 
-  // So consulta o GitHub quando ha algo esperando: numa fila parada a chamada
-  // seria puro atraso na abertura da tela.
-  const github = working ? await githubQueue() : null;
+  const { renderEngine } = await getSettings();
+  const colab = colabUrl();
+  const esperandoColab =
+    renderEngine === 'manual' && rows.some((v) => v.status === 'queued');
+
+  // So consulta o GitHub quando ha algo esperando por ele: numa fila parada,
+  // ou com outro motor escolhido, a chamada seria puro atraso na abertura.
+  const github = working && renderEngine === 'github' ? await githubQueue() : null;
 
   return (
     <>
@@ -75,6 +82,32 @@ export default async function QueuePage() {
             : 'Nada esperando por voce agora.'
         }
       />
+
+      {/* Com o motor manual, "na fila" e um estado de espera legitimo, nao uma
+          falha — mas so faz sentido se o caminho para renderizar estiver a um
+          toque de distancia. */}
+      {esperandoColab && (
+        <div className="card mb-4 border-sky-900/60 bg-sky-950/30">
+          <p className="text-[13px] leading-snug text-sky-100/90">
+            Ha video esperando para ser renderizado. Abra o caderno no Colab,
+            toque no ▶ e deixe a aba aberta por alguns minutos.
+          </p>
+          {colab ? (
+            <a
+              href={colab}
+              target="_blank"
+              rel="noreferrer"
+              className="btn-primary mt-3"
+            >
+              Abrir o Colab
+            </a>
+          ) : (
+            <p className="mt-2 text-[12px] text-muted">
+              Configure o repositorio em Configuracoes para o link aparecer.
+            </p>
+          )}
+        </div>
+      )}
 
       {github && (
         <div className="card mb-4 border-amber-900/60 bg-amber-950/30">
@@ -154,9 +187,14 @@ export default async function QueuePage() {
                 />
               ) : (
                 <div className="mb-3 flex aspect-[9/16] w-full items-center justify-center rounded-xl bg-panel2 text-[13px] text-muted">
+                  {/* Dizer "renderizando" sobre um video que ninguem comecou a
+                      renderizar foi exatamente o que fez a fila parecer
+                      quebrada. Com o motor manual, a espera e a verdade. */}
                   {video.status === 'failed'
                     ? 'Renderizacao falhou'
-                    : 'Renderizando… atualize em alguns minutos'}
+                    : esperandoColab && video.status === 'queued'
+                      ? 'Esperando voce abrir o Colab'
+                      : 'Renderizando… atualize em alguns minutos'}
                 </div>
               )}
 

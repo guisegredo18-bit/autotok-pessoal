@@ -1,6 +1,6 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { isSpace, resolveAppUrl, resolveTikTokRedirect } from '@/lib/env';
+import { resolveAppUrl, resolveTikTokRedirect } from '@/lib/env';
 
 /**
  * O endereco publico da aplicacao decide para onde o TikTok devolve o login e
@@ -55,41 +55,8 @@ describe('endereco da aplicacao', () => {
     );
   });
 
-  test('deriva do dominio do Space no Hugging Face', () => {
-    // Poupa um secret na instalacao pelo celular: o Hugging Face ja injeta o
-    // dominio, entao ninguem precisa digita-lo a mao.
-    assert.equal(
-      resolveAppUrl({ SPACE_HOST: 'usuario-autotok.hf.space' }),
-      'https://usuario-autotok.hf.space',
-    );
-  });
-
-  test('APP_URL tem prioridade sobre o dominio do Space', () => {
-    assert.equal(
-      resolveAppUrl({
-        APP_URL: 'https://dominio-proprio.com',
-        SPACE_HOST: 'usuario-autotok.hf.space',
-      }),
-      'https://dominio-proprio.com',
-    );
-  });
-
   test('sem nada configurado, assume desenvolvimento local', () => {
     assert.equal(resolveAppUrl({}), 'http://localhost:3000');
-  });
-});
-
-describe('isSpace', () => {
-  test('reconhece o Space por qualquer uma das duas variaveis', () => {
-    assert.equal(isSpace({ SPACE_ID: 'usuario/autotok' }), true);
-    assert.equal(isSpace({ SPACE_HOST: 'usuario-autotok.hf.space' }), true);
-  });
-
-  test('Vercel e maquina local nao sao Space', () => {
-    // Importa: e este `false` que mantem a Vercel despachando para o GitHub
-    // em vez de tentar renderizar onde nao ha ffmpeg.
-    assert.equal(isSpace({ VERCEL_URL: 'autotok.vercel.app' }), false);
-    assert.equal(isSpace({}), false);
   });
 });
 
