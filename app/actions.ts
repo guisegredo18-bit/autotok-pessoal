@@ -208,18 +208,41 @@ export async function generateFromTrendsAction(): Promise<ActionState> {
   return generateIdeasAction(null, new FormData());
 }
 
+/**
+ * Manda o video para a renderizacao — e registra na propria linha quando o
+ * disparo nao foi aceito.
+ *
+ * Sem isso, um disparo recusado deixava o video em "na fila" para sempre: a
+ * tela dizia "renderizando, atualize em alguns minutos" enquanto nenhum job
+ * existia do outro lado, e a unica pista era um toast vermelho que some ao
+ * trocar de aba. Gravando o erro na linha, a Fila mostra o motivo e o botao
+ * de tentar de novo aparece.
+ */
+async function requestRender(videoId: string): Promise<void> {
+  if (!canDispatch()) {
+    // Sem GitHub Actions o render roda aqui. Vai demorar; o `void` evita
+    // segurar a resposta, e o status no banco conta o resto da historia.
+    void renderQueuedVideo(videoId).catch((err) => console.error(err));
+    return;
+  }
+
+  try {
+    await dispatch('render-video', { video_id: videoId });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    await db
+      .update(videos)
+      .set({ status: 'failed', error: message.slice(0, 2000) })
+      .where(eq(videos.id, videoId));
+    throw err;
+  }
+}
+
 export async function approveIdeaAction(ideaId: string): Promise<ActionState> {
   try {
     await guard();
     const videoId = await enqueueRender(ideaId);
-
-    if (canDispatch()) {
-      await dispatch('render-video', { video_id: videoId });
-    } else {
-      // Sem GitHub Actions o render roda aqui. Vai demorar; o `void` evita
-      // segurar a resposta, e o status no banco conta o resto da historia.
-      void renderQueuedVideo(videoId).catch((err) => console.error(err));
-    }
+    await requestRender(videoId);
 
     revalidatePath('/ideias');
     revalidatePath('/fila');
@@ -380,11 +403,7 @@ export async function retryVideoAction(videoId: string): Promise<ActionState> {
       .set({ status: 'queued', error: null })
       .where(eq(videos.id, videoId));
 
-    if (canDispatch()) {
-      await dispatch('render-video', { video_id: videoId });
-    } else {
-      void renderQueuedVideo(videoId).catch((err) => console.error(err));
-    }
+    await requestRender(videoId);
 
     revalidatePath('/fila');
     return { ok: true, message: 'Renderizacao reiniciada.' };

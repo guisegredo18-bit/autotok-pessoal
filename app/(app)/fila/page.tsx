@@ -1,6 +1,10 @@
+import Link from 'next/link';
 import { sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { videos } from '@/lib/db/schema';
+import { env } from '@/lib/env';
+import { hydrateEnv } from '@/lib/secrets';
+import { listRecentRuns, queueHealth } from '@/lib/github/repo';
 import { getAccount } from '@/lib/tiktok/account';
 import { ActionButton } from '@/components/action-button';
 import { AutoRefresh } from '@/components/auto-refresh';
@@ -15,7 +19,29 @@ import {
 
 export const dynamic = 'force-dynamic';
 
+/**
+ * Quando o GitHub nao entrega maquina, o job fica em "queued" e o video fica
+ * "na fila" sem erro nenhum para justificar.
+ *
+ * O diagnostico ja existia em Configuracoes, mas ninguem abre Configuracoes
+ * enquanto espera um video: quem espera fica nesta tela. Nunca lanca — a fila
+ * precisa abrir mesmo com o token errado ou o GitHub fora do ar.
+ */
+async function githubQueue() {
+  if (!env.githubToken || !env.githubRepo) return null;
+  try {
+    const health = queueHealth(await listRecentRuns(10));
+    return health.stuck ? health : null;
+  } catch {
+    return null;
+  }
+}
+
 export default async function QueuePage() {
+  // Sem isso o token guardado no banco nao chega ao `env` e o diagnostico
+  // acima desiste antes de perguntar qualquer coisa ao GitHub.
+  await hydrateEnv();
+
   const [rows, account] = await Promise.all([
     db
       .select()
@@ -34,6 +60,10 @@ export default async function QueuePage() {
     ['queued', 'rendering', 'failed'].includes(v.status),
   ).length;
 
+  // So consulta o GitHub quando ha algo esperando: numa fila parada a chamada
+  // seria puro atraso na abertura da tela.
+  const github = working ? await githubQueue() : null;
+
   return (
     <>
       {working && <AutoRefresh />}
@@ -45,6 +75,22 @@ export default async function QueuePage() {
             : 'Nada esperando por voce agora.'
         }
       />
+
+      {github && (
+        <div className="card mb-4 border-amber-900/60 bg-amber-950/30">
+          <p className="text-[13px] leading-snug text-amber-200/90">
+            <strong>O GitHub nao esta entregando maquina.</strong>{' '}
+            {github.waiting} execucao(oes) esperam ha ate {github.oldestMinutes}{' '}
+            minutos. O job foi criado, mas nenhum runner assumiu — por isso o
+            video nao sai de &quot;na fila&quot;. Reenviar apenas empilha jobs.
+            Confira a franquia de minutos e o estado da conta em{' '}
+            <Link href="/config" className="underline">
+              Configuracoes
+            </Link>
+            .
+          </p>
+        </div>
+      )}
 
       {/* Videos presos so atrapalham: nao rendem nada e escondem os que
           importam. O botao so aparece quando ha o que limpar. */}
