@@ -103,14 +103,32 @@ export function decrypt(payload: string): string | null {
   }
 }
 
-let cache: { values: SecretValues; at: number } | null = null;
+/**
+ * Quantas chaves existem no banco e quantas nao puderam ser decifradas.
+ *
+ * A distincao importa porque as duas situacoes se parecem: em ambas a chave
+ * "some". Sem esta contagem, um AUTH_SECRET trocado se disfarca de "voce
+ * esqueceu de preencher" — e a pessoa preenche tudo de novo sem entender por
+ * que sumiu.
+ */
+export type SecretsHealth = { stored: number; unreadable: number };
+
+let cache: { values: SecretValues; health: SecretsHealth; at: number } | null = null;
 const CACHE_MS = 30_000;
 
 /** Le as chaves guardadas no banco. */
 export async function loadSecrets(force = false): Promise<SecretValues> {
-  if (!force && cache && Date.now() - cache.at < CACHE_MS) return cache.values;
+  return (await loadSecretsWithHealth(force)).values;
+}
+
+async function loadSecretsWithHealth(
+  force = false,
+): Promise<{ values: SecretValues; health: SecretsHealth }> {
+  if (!force && cache && Date.now() - cache.at < CACHE_MS) return cache;
 
   const values: SecretValues = {};
+  const health: SecretsHealth = { stored: 0, unreadable: 0 };
+
   try {
     const [row] = await db.select().from(settings).where(eq(settings.key, STORE_KEY)).limit(1);
     const stored = (row?.value ?? {}) as Record<string, string>;
@@ -118,16 +136,24 @@ export async function loadSecrets(force = false): Promise<SecretValues> {
     for (const field of SECRET_FIELDS) {
       const raw = stored[field];
       if (typeof raw !== 'string' || raw.length === 0) continue;
+
+      health.stored++;
       const plain = decrypt(raw);
       if (plain) values[field] = plain;
+      else health.unreadable++;
     }
   } catch {
     // Banco indisponivel ou tabelas ainda nao criadas: seguimos so com o
     // ambiente, que e exatamente o estado de quem acabou de instalar.
   }
 
-  cache = { values, at: Date.now() };
-  return values;
+  cache = { values, health, at: Date.now() };
+  return cache;
+}
+
+/** Diagnostico para a tela de configuracoes. */
+export async function secretsHealth(): Promise<SecretsHealth> {
+  return (await loadSecretsWithHealth()).health;
 }
 
 /** Grava (ou apaga, quando o valor vem vazio) as chaves informadas. */
@@ -170,7 +196,17 @@ let hydrated = false;
 export async function hydrateEnv(force = false): Promise<void> {
   if (hydrated && !force) return;
 
-  const values = await loadSecrets(force);
+  const { values, health } = await loadSecretsWithHealth(force);
+
+  if (health.unreadable > 0) {
+    // Vai para o log do GitHub Actions, onde nao ha tela para mostrar aviso.
+    console.warn(
+      `[autotok] ${health.unreadable} de ${health.stored} chaves nao puderam ser decifradas. ` +
+        'O AUTH_SECRET usado aqui e diferente do que salvou as chaves — confira se o secret ' +
+        'AUTH_SECRET do repositorio e identico ao do painel.',
+    );
+  }
+
   const target = env as unknown as Record<string, unknown>;
 
   for (const field of SECRET_FIELDS) {

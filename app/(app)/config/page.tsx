@@ -5,7 +5,7 @@ import { getAccount } from '@/lib/tiktok/account';
 import { ActionButton } from '@/components/action-button';
 import { SettingsForm } from '@/components/settings-form';
 import { SecretsForm } from '@/components/secrets-form';
-import { hydrateEnv, secretsForForm, secretsStatus } from '@/lib/secrets';
+import { hydrateEnv, secretsForForm, secretsHealth, secretsStatus } from '@/lib/secrets';
 import { PageHeader } from '@/components/ui';
 import { disconnectTikTokAction, logoutAction } from '@/app/actions';
 
@@ -27,11 +27,12 @@ export default async function ConfigPage() {
   // resumo mostraria como faltando algo que ja esta configurado.
   await hydrateEnv(true);
 
-  const [settings, account, secretValues, filled] = await Promise.all([
+  const [settings, account, secretValues, filled, health] = await Promise.all([
     getSettings(),
     getAccount().catch(() => null),
     secretsForForm(),
     secretsStatus(),
+    secretsHealth(),
   ]);
   const status = integrationStatus();
 
@@ -138,6 +139,26 @@ export default async function ConfigPage() {
           Preencha aqui, pelo celular, em vez de configurar secrets no GitHub.
           Fica tudo cifrado no seu banco de dados, e o GitHub Actions le daqui.
         </p>
+
+        {/* Sem este aviso, um AUTH_SECRET trocado se disfarca de "voce esqueceu
+            de preencher" — e a pessoa refaz tudo sem entender o que houve. */}
+        {health.unreadable > 0 && (
+          <div className="card mb-3 border-red-900/60 bg-red-950/30">
+            <p className="text-[14px] font-semibold text-red-300">
+              {health.unreadable} de {health.stored} chaves nao puderam ser lidas
+            </p>
+            <p className="mt-1.5 text-[13px] leading-snug text-red-200/85">
+              Elas estao salvas, mas o <code>AUTH_SECRET</code> atual e diferente
+              do que foi usado para guarda-las — e so com ele que da para
+              decifrar.
+            </p>
+            <p className="mt-2 text-[13px] leading-snug text-red-200/85">
+              Duas saidas: volte o <code>AUTH_SECRET</code> anterior nas
+              variaveis do seu deploy, ou preencha as chaves de novo aqui
+              embaixo (elas serao regravadas com o segredo atual).
+            </p>
+          </div>
+        )}
         <SecretsForm values={secretValues} filled={filled} />
       </section>
 

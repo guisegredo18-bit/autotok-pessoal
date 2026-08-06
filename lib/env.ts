@@ -107,7 +107,9 @@ export function requireEnv<K extends keyof typeof env>(...keys: K[]): void {
   const missing = keys.filter((k) => !env[k]);
   if (missing.length > 0) {
     throw new Error(
-      `Configuracao faltando: ${missing.join(', ')}. Preencha no .env (veja .env.example).`,
+      `Configuracao faltando: ${missing.join(', ')}. Preencha em Configuracoes > Chaves ` +
+        'no painel (ou no .env, se estiver rodando local). Se voce ja preencheu, confira ' +
+        'se o AUTH_SECRET e o mesmo nos dois lugares — sem ele as chaves nao sao decifradas.',
     );
   }
 }
