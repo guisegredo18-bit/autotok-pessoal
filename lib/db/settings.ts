@@ -22,6 +22,16 @@ export type AppSettings = {
   captionSignature: string;
   /** Palavras que nunca devem aparecer no roteiro. */
   blockedWords: string[];
+  /**
+   * Onde os videos sao renderizados e publicados.
+   *
+   * `github` manda o trabalho pesado para o Actions e mantem o painel leve —
+   * o que so funciona enquanto a conta recebe runner. Quando nao recebe, o job
+   * fica em "queued" para sempre e nao ha erro para mostrar. `aqui` roda no
+   * proprio processo do painel: serve quando ele esta num container de
+   * verdade, com ffmpeg e sem limite de tempo de request.
+   */
+  renderEngine: 'github' | 'aqui';
 };
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -35,6 +45,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   targetDuration: 30,
   captionSignature: '',
   blockedWords: [],
+  renderEngine: 'github',
 };
 
 const KEY = 'app';

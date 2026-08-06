@@ -168,6 +168,49 @@ execuções, para você diagnosticar sem sair do celular.
 
 Agora aprove uma ideia: em poucos minutos o vídeo aparece na aba **Fila**.
 
+> **Se o vídeo ficar em "na fila" e nunca sair de lá**, o GitHub não está
+> entregando máquina para os seus jobs. A Fila avisa quando isso acontece. A
+> saída está na etapa 4d.
+
+### Etapa 4d — quando o GitHub Actions não entrega máquina (~15 min)
+
+Às vezes o job é criado e nenhum runner assume: ele fica em `queued` para
+sempre, sem erro nenhum — porque nada chegou a rodar. Duas causas:
+
+- **Repositório privado com a franquia mensal esgotada.** Torne o repositório
+  público em `github.com/SEU-USUARIO/autotok-pessoal/settings` (ao final da
+  página, *Change repository visibility*). Em repositório público o Actions é
+  ilimitado e os secrets continuam privados.
+- **Actions bloqueado na conta inteira.** Acontece mesmo com repositório
+  público, e não há nada a consertar do lado do app.
+
+No segundo caso, tire o GitHub do caminho: rode o painel inteiro num container
+com ffmpeg, e ele mesmo renderiza. O **Hugging Face Spaces** dá 2 vCPU e 16 GB
+de graça, sem cartão, e dá para criar tudo pelo Safari do iPhone.
+
+1. Em [huggingface.co](https://huggingface.co) crie a conta e vá em
+   **New Space**. Nome à sua escolha, SDK **Docker** (template *Blank*),
+   visibilidade **Public** — o Space público é o que é gratuito, e o painel
+   continua protegido pela sua senha.
+2. Na aba **Files** do Space → **Add file** → **Create a new file** → nome
+   `Dockerfile` → cole o conteúdo de
+   [`deploy/huggingface/Dockerfile`](deploy/huggingface/Dockerfile) deste
+   repositório → **Commit**.
+3. Em **Settings → Variables and secrets**, adicione como *Secret*:
+   `DATABASE_URL` e `AUTH_SECRET` — exatamente os mesmos valores do painel na
+   Vercel. Adicione também `APP_URL` com o endereço do Space
+   (`https://SEU-USUARIO-NOME-DO-SPACE.hf.space`).
+4. Espere o build (~5 min). Abra o Space, faça login com a sua senha.
+5. Em **Configurações → Conteúdo**, mude **Onde renderizar** para
+   **Aqui mesmo (este servidor)** e salve.
+
+Pronto: aprovar uma ideia renderiza no próprio Space, sem passar pelo GitHub.
+Os dois painéis (Vercel e Space) enxergam o mesmo banco, então a fila é a
+mesma — mas use o do Space, porque só ele consegue renderizar.
+
+> Para atualizar o código depois, o Space precisa reconstruir: **Settings →
+> Factory rebuild**. O `Dockerfile` clona o repositório no momento do build.
+
 ### Etapa 5 — conectar o TikTok (~10 min)
 
 Em [developers.tiktok.com](https://developers.tiktok.com): criar app → adicionar
@@ -468,7 +511,14 @@ vieram) — é essa informação que permite corrigir o coletor.
 **Vídeo saiu com fundo liso** — falta `PEXELS_API_KEY`, ou o termo de busca da
 cena não encontrou nada. O aviso aparece no card do vídeo.
 
-**"ffmpeg não encontrado"** — só acontece rodando local; instale o ffmpeg.
+**"ffmpeg não encontrado"** — o processo que renderiza não tem ffmpeg. Rodando
+local, instale-o. Se aparecer com **Onde renderizar: aqui mesmo**, é porque o
+painel está na Vercel, que não tem ffmpeg — essa opção só serve para o painel
+rodando em container (etapa 4d).
+
+**Vídeo fica "na fila" e nunca renderiza** — o job existe no GitHub mas nenhum
+runner assumiu. A Fila mostra há quanto tempo. Reenviar não adianta: veja a
+etapa 4d.
 
 **Vídeo publicado ficou privado** — comportamento esperado antes da auditoria do
 TikTok. Ver a seção "O que você precisa saber".

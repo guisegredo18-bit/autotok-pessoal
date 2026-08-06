@@ -239,15 +239,21 @@ export default async function ConfigPage() {
               </p>
               <p className="mt-1.5 text-[13px] leading-snug text-red-200/85">
                 A mais antiga espera ha {github.queue.oldestMinutes} minutos sem
-                receber maquina. Isso quase sempre e a franquia mensal de minutos
-                do GitHub Actions esgotada.
+                receber maquina. O job foi criado, mas nenhum runner assumiu —
+                nao ha erro para mostrar porque nada chegou a rodar.
               </p>
               <p className="mt-2 text-[13px] leading-snug text-red-200/85">
-                A saida gratuita e tornar o repositorio <strong>publico</strong>:
-                em repositorios publicos o Actions e ilimitado. Seus secrets
-                continuam privados. Em{' '}
-                <code>github.com/{env.githubRepo}/settings</code>, ao final da
-                pagina, em <em>Change repository visibility</em>.
+                Duas causas comuns: franquia mensal esgotada (repositorio
+                privado — tornar publico em{' '}
+                <code>github.com/{env.githubRepo}/settings</code> resolve, e o
+                Actions passa a ser ilimitado) ou Actions bloqueado na conta
+                inteira, o que acontece mesmo em repositorio publico.
+              </p>
+              <p className="mt-2 text-[13px] leading-snug text-red-200/85">
+                Se o repositorio ja e publico, o GitHub nao vai destravar
+                sozinho: mude <strong>Onde renderizar</strong> para
+                &quot;aqui mesmo&quot; em Conteudo, acima, e rode o painel num
+                container com ffmpeg.
               </p>
             </div>
           )}

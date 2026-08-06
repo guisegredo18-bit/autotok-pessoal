@@ -218,8 +218,22 @@ export async function generateFromTrendsAction(): Promise<ActionState> {
  * trocar de aba. Gravando o erro na linha, a Fila mostra o motivo e o botao
  * de tentar de novo aparece.
  */
+/**
+ * Se o trabalho pesado vai para o GitHub ou roda aqui mesmo.
+ *
+ * Duas condicoes: precisa haver token (senao nao ha para onde mandar) e a
+ * preferencia precisa ser `github`. A preferencia existe para trocar de motor
+ * sem apagar o token — o mesmo token continua servindo para cadastrar secrets
+ * e para diagnosticar a fila do Actions.
+ */
+async function usaGithub(): Promise<boolean> {
+  if (!canDispatch()) return false;
+  const { renderEngine } = await getSettings();
+  return renderEngine === 'github';
+}
+
 async function requestRender(videoId: string): Promise<void> {
-  if (!canDispatch()) {
+  if (!(await usaGithub())) {
     // Sem GitHub Actions o render roda aqui. Vai demorar; o `void` evita
     // segurar a resposta, e o status no banco conta o resto da historia.
     void renderQueuedVideo(videoId).catch((err) => console.error(err));
@@ -269,7 +283,7 @@ export async function publishVideoAction(videoId: string): Promise<ActionState> 
   try {
     await guard();
 
-    if (canDispatch()) {
+    if (await usaGithub()) {
       await db.update(videos).set({ status: 'publishing' }).where(eq(videos.id, videoId));
       await dispatch('publish-video', { video_id: videoId });
       revalidatePath('/fila');
@@ -385,7 +399,7 @@ export async function retryVideoAction(videoId: string): Promise<ActionState> {
     // Reenviar enquanto a fila do GitHub esta travada so empilha jobs que
     // ninguem vai executar — e foi o que aconteceu: sete disparos parados
     // para o mesmo video. Melhor dizer a verdade do que fingir que tentou.
-    if (canDispatch()) {
+    if (await usaGithub()) {
       const health = queueHealth(await listRecentRuns(10).catch(() => []));
       if (health.stuck) {
         return {
@@ -434,6 +448,7 @@ export async function saveSettingsAction(
       minScore: Math.max(0, Math.min(100, num('minScore', 60))),
       targetDuration: Math.max(10, Math.min(180, num('targetDuration', 30))),
       captionSignature: String(form.get('captionSignature') ?? '').trim(),
+      renderEngine: form.get('renderEngine') === 'aqui' ? 'aqui' : 'github',
       blockedWords: String(form.get('blockedWords') ?? '')
         .split(',')
         .map((w) => w.trim())

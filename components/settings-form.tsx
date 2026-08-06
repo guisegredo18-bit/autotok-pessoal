@@ -131,6 +131,26 @@ export function SettingsForm({ settings }: { settings: AppSettings }) {
       </div>
 
       <div>
+        <label className="label" htmlFor="renderEngine">
+          Onde renderizar
+        </label>
+        <select
+          id="renderEngine"
+          name="renderEngine"
+          className="field"
+          defaultValue={settings.renderEngine}
+        >
+          <option value="github">GitHub Actions</option>
+          <option value="aqui">Aqui mesmo (este servidor)</option>
+        </select>
+        <p className="mt-1 text-[12px] leading-snug text-muted">
+          &quot;Aqui mesmo&quot; so funciona se o painel estiver num container
+          com ffmpeg — na Vercel nao ha ffmpeg nem tempo de request suficiente.
+          Escolha esta opcao se o Actions parar de receber maquina.
+        </p>
+      </div>
+
+      <div>
         <label className="label" htmlFor="blockedWords">
           Palavras proibidas (separadas por virgula)
         </label>
