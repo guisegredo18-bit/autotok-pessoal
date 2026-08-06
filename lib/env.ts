@@ -56,7 +56,9 @@ export const env = {
     | 'anthropic') || 'gemini',
 
   geminiApiKey: process.env.GEMINI_API_KEY ?? '',
-  geminiModel: process.env.GEMINI_MODEL || 'gemini-2.5-flash',
+  // Apelido que o Google mantem apontando para o Flash estavel atual. Se um
+  // dia sumir, a aplicacao descobre o substituto sozinha (lib/ai/gemini-models).
+  geminiModel: process.env.GEMINI_MODEL || 'gemini-flash-latest',
   /** Trocavel para apontar a um gateway/proxy — e para os testes. */
   geminiBaseUrl: (
     process.env.GEMINI_BASE_URL || 'https://generativelanguage.googleapis.com/v1beta'

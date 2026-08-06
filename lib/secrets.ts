@@ -51,6 +51,53 @@ export const SECRET_FIELDS = [
 export type SecretField = (typeof SECRET_FIELDS)[number];
 export type SecretValues = Partial<Record<SecretField, string>>;
 
+/**
+ * De qual variavel de ambiente cada campo vem.
+ *
+ * Precisamos disso para saber quem tem prioridade. Varios campos tem valor
+ * padrao no codigo (modelo, provedor, regiao), entao "esta preenchido" nao
+ * distingue "voce definiu" de "e o padrao" — e, sem essa distincao, o que
+ * voce salva no painel jamais sobrescreveria o padrao. Escolher Groq na tela
+ * simplesmente nao surtia efeito.
+ */
+export const FIELD_ENV_VAR: Record<SecretField, string> = {
+  aiProvider: 'AI_PROVIDER',
+  geminiApiKey: 'GEMINI_API_KEY',
+  geminiModel: 'GEMINI_MODEL',
+  groqApiKey: 'GROQ_API_KEY',
+  groqModel: 'GROQ_MODEL',
+  openRouterApiKey: 'OPENROUTER_API_KEY',
+  openRouterModel: 'OPENROUTER_MODEL',
+  anthropicApiKey: 'ANTHROPIC_API_KEY',
+  pexelsApiKey: 'PEXELS_API_KEY',
+  ttsProvider: 'TTS_PROVIDER',
+  ttsVoice: 'TTS_VOICE',
+  elevenLabsApiKey: 'ELEVENLABS_API_KEY',
+  elevenLabsVoiceId: 'ELEVENLABS_VOICE_ID',
+  storageDriver: 'STORAGE_DRIVER',
+  s3Endpoint: 'S3_ENDPOINT',
+  s3Region: 'S3_REGION',
+  s3Bucket: 'S3_BUCKET',
+  s3AccessKeyId: 'S3_ACCESS_KEY_ID',
+  s3SecretAccessKey: 'S3_SECRET_ACCESS_KEY',
+  s3PublicUrl: 'S3_PUBLIC_URL',
+  tiktokClientKey: 'TIKTOK_CLIENT_KEY',
+  tiktokClientSecret: 'TIKTOK_CLIENT_SECRET',
+  githubToken: 'GITHUB_TOKEN',
+  githubRepo: 'GITHUB_REPO',
+  ntfyTopic: 'NTFY_TOPIC',
+  trendCountry: 'TREND_COUNTRY',
+};
+
+/** true quando o valor foi definido no ambiente, e nao herdado de um padrao. */
+export function definedInEnvironment(
+  field: SecretField,
+  source: Record<string, string | undefined> = process.env,
+): boolean {
+  const value = source[FIELD_ENV_VAR[field]];
+  return typeof value === 'string' && value.trim() !== '';
+}
+
 /** Campos que nunca sao devolvidos para a tela — so dizemos se estao preenchidos. */
 export const SENSITIVE_FIELDS: SecretField[] = [
   'geminiApiKey',
@@ -212,7 +259,10 @@ export async function hydrateEnv(force = false): Promise<void> {
   for (const field of SECRET_FIELDS) {
     const fromDb = values[field];
     if (!fromDb) continue;
-    if (target[field]) continue; // ambiente tem prioridade
+    // Um valor definido no ambiente vence (permite um .env local sobrepor o
+    // banco); um padrao do codigo, nao — senao o que voce salva no painel
+    // nunca teria efeito nos campos que tem padrao.
+    if (definedInEnvironment(field)) continue;
     target[field] = fromDb;
   }
 

@@ -1,4 +1,5 @@
 import { env, requireEnv } from '@/lib/env';
+import { isModelNotFound, rankModels, usableModels } from './gemini-models';
 
 /**
  * Provedores de IA.
@@ -63,6 +64,28 @@ async function postJson(url: string, body: unknown, headers: Record<string, stri
  * Free tier sem cartao de credito e limite diario muito acima do nosso uso.
  * E tambem o que escreve melhor em portugues entre as opcoes gratuitas.
  */
+/** Modelo descoberto nesta execucao, para nao listar a cada chamada. */
+let geminiResolved: string | null = null;
+
+/** Pergunta ao Google quais modelos a conta pode usar e escolhe o melhor. */
+async function discoverGeminiModel(): Promise<string> {
+  const res = await fetch(`${env.geminiBaseUrl}/models?key=${env.geminiApiKey}`, {
+    signal: AbortSignal.timeout(20_000),
+  });
+  if (!res.ok) {
+    throw new Error(
+      `nao consegui listar os modelos disponiveis (HTTP ${res.status}). ` +
+        'Confira se a chave do Gemini esta correta.',
+    );
+  }
+
+  const ranked = rankModels(usableModels(await res.json()));
+  if (ranked.length === 0) {
+    throw new Error('a sua conta do Gemini nao tem nenhum modelo Flash disponivel.');
+  }
+  return ranked[0];
+}
+
 export const gemini: AiProvider = {
   name: 'gemini',
   label: PROVIDER_LABELS.gemini,
@@ -70,18 +93,38 @@ export const gemini: AiProvider = {
 
   async complete({ system, prompt, maxTokens }) {
     requireEnv('geminiApiKey');
-    const url =
-      `${env.geminiBaseUrl}/models/` +
-      `${env.geminiModel}:generateContent?key=${env.geminiApiKey}`;
 
-    const json = await postJson(url, {
+    const body = {
       systemInstruction: { parts: [{ text: system }] },
       contents: [{ role: 'user', parts: [{ text: prompt }] }],
       generationConfig: {
         responseMimeType: 'application/json',
         maxOutputTokens: maxTokens,
       },
-    });
+    };
+
+    const call = (model: string) =>
+      postJson(
+        `${env.geminiBaseUrl}/models/${model}:generateContent?key=${env.geminiApiKey}`,
+        body,
+      );
+
+    let json: any;
+    try {
+      json = await call(geminiResolved ?? env.geminiModel);
+    } catch (err) {
+      // Modelo aposentado: em vez de exigir que voce descubra o nome novo e
+      // edite a configuracao, perguntamos ao Google e seguimos.
+      if (!isModelNotFound(describeError(err))) throw err;
+
+      const discovered = await discoverGeminiModel();
+      console.warn(
+        `[autotok] O modelo "${env.geminiModel}" nao esta disponivel; usando "${discovered}". ` +
+          'Salve esse nome em Configuracoes > Chaves para evitar a consulta extra.',
+      );
+      geminiResolved = discovered;
+      json = await call(discovered);
+    }
 
     const parts: any[] = json?.candidates?.[0]?.content?.parts ?? [];
     const text = parts.map((p) => p?.text ?? '').join('');
@@ -92,6 +135,10 @@ export const gemini: AiProvider = {
     return text;
   },
 };
+
+function describeError(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
 
 // --- APIs compativeis com OpenAI (Groq, OpenRouter, e outros) ---------------
 
