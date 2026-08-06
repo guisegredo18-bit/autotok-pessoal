@@ -151,21 +151,20 @@ R2 → criar bucket → em *Settings* ative o **Public access** (guarde a URL
 
 Toque em **Salvar chaves**. Elas ficam cifradas no seu banco de dados.
 
-**4c. Dois secrets no GitHub** — só estes dois, uma vez só. Abra
-`github.com/guisegredo18-bit/autotok-pessoal/settings/secrets/actions` e
-adicione:
+**4c. Um toque** — ainda em **Configurações**, na seção *Renderização (GitHub
+Actions)*, toque em **Configurar o GitHub para mim**.
 
-| Nome | Valor |
-|---|---|
-| `DATABASE_URL` | a mesma connection string do Neon |
-| `AUTH_SECRET` | o mesmo valor que você pôs na Vercel |
+O painel cadastra no repositório os dois secrets que o robô de renderização
+precisa (`DATABASE_URL` e `AUTH_SECRET`), usando o token que você acabou de
+salvar. Os valores vão cifrados, e o `AUTH_SECRET` sai idêntico ao do painel
+por construção — que é justamente onde dava errado quando feito à mão.
 
-É isso: o robô que renderiza os vídeos usa esses dois para chegar no banco e
-decifrar as demais chaves. Nenhuma outra credencial precisa ser copiada para
-o GitHub.
+A mesma seção mostra se os secrets estão cadastrados e o resultado das últimas
+execuções, para você diagnosticar sem sair do celular.
 
-> Se o formulário do GitHub ficar apertado no celular, toque no **aA** na barra
-> de endereço → **Solicitar Site para Computador**.
+> Se preferir fazer manualmente, é em
+> `github.com/SEU-USUARIO/autotok-pessoal/settings/secrets/actions`, com os
+> mesmos dois nomes.
 
 Agora aprove uma ideia: em poucos minutos o vídeo aparece na aba **Fila**.
 

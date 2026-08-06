@@ -124,12 +124,18 @@ export default async function QueuePage() {
                   </div>
                 )}
 
-                {video.status === 'failed' && (
+                {/* "na fila" parado tambem precisa de saida: se o job do
+                    GitHub Actions nunca rodou, o video fica preso nesse estado
+                    sem nenhum erro para justificar um botao de "tentar de
+                    novo". */}
+                {(video.status === 'failed' || video.status === 'queued') && (
                   <ActionButton
                     action={retryVideoAction.bind(null, video.id)}
                     className="btn-ghost"
                   >
-                    Tentar renderizar de novo
+                    {video.status === 'queued'
+                      ? 'Reenviar para renderizacao'
+                      : 'Tentar renderizar de novo'}
                   </ActionButton>
                 )}
 

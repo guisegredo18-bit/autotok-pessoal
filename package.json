@@ -28,6 +28,7 @@
     "@aws-sdk/s3-request-presigner": "^3.716.0",
     "drizzle-orm": "^0.38.3",
     "jose": "^5.9.6",
+    "libsodium-wrappers": "^0.8.4",
     "msedge-tts": "^1.3.4",
     "next": "^15.1.6",
     "postgres": "^3.4.5",
@@ -36,6 +37,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@types/libsodium-wrappers": "^0.7.14",
     "@types/node": "^22.10.5",
     "@types/react": "^19.0.7",
     "@types/react-dom": "^19.0.3",

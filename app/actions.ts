@@ -14,6 +14,7 @@ import { generateIdeasFromTrends, generateIdeasForTopic } from '@/lib/pipeline/i
 import { enqueueRender, renderQueuedVideo } from '@/lib/pipeline/render';
 import { publishVideo } from '@/lib/pipeline/publish';
 import { canDispatch, dispatch } from '@/lib/dispatch';
+import { putSecret } from '@/lib/github/repo';
 import { disconnectAccount } from '@/lib/tiktok/account';
 import { env } from '@/lib/env';
 
@@ -396,6 +397,46 @@ export async function saveSecretsAction(
     revalidatePath('/config');
     revalidatePath('/');
     return { ok: true, message: 'Chaves salvas e ja em uso.' };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+/**
+ * Cadastra no repositorio os dois secrets que o GitHub Actions precisa.
+ *
+ * Essa era a etapa em que a instalacao pelo celular travava: um formulario do
+ * GitHub, apertado no Safari, repetido duas vezes, com valores longos que
+ * precisam bater exatamente com os da Vercel. Como o token que voce ja
+ * configurou tem o escopo necessario, o painel faz isso sozinho — e, por vir
+ * da mesma origem, o AUTH_SECRET sai igual por construcao.
+ */
+export async function setupGithubSecretsAction(): Promise<ActionState> {
+  try {
+    await guard();
+
+    if (!env.githubToken || !env.githubRepo) {
+      return {
+        ok: false,
+        message:
+          'Preencha o token e o repositorio do GitHub em Chaves (logo abaixo) antes deste passo.',
+      };
+    }
+    if (!env.databaseUrl || !env.authSecret) {
+      return {
+        ok: false,
+        message: 'DATABASE_URL e AUTH_SECRET precisam estar definidos no deploy.',
+      };
+    }
+
+    await putSecret('DATABASE_URL', env.databaseUrl);
+    await putSecret('AUTH_SECRET', env.authSecret);
+
+    revalidatePath('/config');
+    return {
+      ok: true,
+      message: 'Pronto: DATABASE_URL e AUTH_SECRET cadastrados no repositorio.',
+    };
   } catch (err) {
     return fail(err);
   }

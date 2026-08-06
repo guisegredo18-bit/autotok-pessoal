@@ -8,7 +8,8 @@ import { SecretsForm } from '@/components/secrets-form';
 import { hydrateEnv, secretsForForm, secretsHealth, secretsStatus } from '@/lib/secrets';
 import { checkVersion } from '@/lib/version';
 import { PageHeader } from '@/components/ui';
-import { disconnectTikTokAction, logoutAction } from '@/app/actions';
+import { disconnectTikTokAction, logoutAction, setupGithubSecretsAction } from '@/app/actions';
+import { listRecentRuns, listSecretNames } from '@/lib/github/repo';
 
 export const dynamic = 'force-dynamic';
 
@@ -23,18 +24,42 @@ const CHECKS: { key: keyof ReturnType<typeof integrationStatus>; label: string; 
   { key: 'push', label: 'Notificacao no iPhone', hint: 'topico do ntfy' },
 ];
 
+/**
+ * Diagnostico do GitHub Actions.
+ *
+ * Nunca lanca: sem token, com token errado ou com o GitHub fora do ar, a tela
+ * de configuracoes precisa continuar abrindo — e justamente aqui que se
+ * conserta o token.
+ */
+async function githubStatus() {
+  if (!env.githubToken || !env.githubRepo) {
+    return { secrets: [] as string[], runs: [], error: 'token do GitHub nao configurado' };
+  }
+  try {
+    const [secrets, runs] = await Promise.all([listSecretNames(), listRecentRuns(5)]);
+    return { secrets, runs, error: null as string | null };
+  } catch (err) {
+    return {
+      secrets: [] as string[],
+      runs: [] as Awaited<ReturnType<typeof listRecentRuns>>,
+      error: err instanceof Error ? err.message : String(err),
+    };
+  }
+}
+
 export default async function ConfigPage() {
   // Carrega as chaves guardadas no banco antes de montar a tela, senao o
   // resumo mostraria como faltando algo que ja esta configurado.
   await hydrateEnv(true);
 
-  const [settings, account, secretValues, filled, health, version] = await Promise.all([
+  const [settings, account, secretValues, filled, health, version, github] = await Promise.all([
     getSettings(),
     getAccount().catch(() => null),
     secretsForForm(),
     secretsStatus(),
     secretsHealth(),
     checkVersion(),
+    githubStatus(),
   ]);
   const status = integrationStatus();
 
@@ -162,6 +187,69 @@ export default async function ConfigPage() {
           </div>
         )}
         <SecretsForm values={secretValues} filled={filled} />
+      </section>
+
+      <section className="mb-5">
+        <h2 className="mb-2 text-[13px] font-semibold uppercase tracking-wide text-muted">
+          Renderizacao (GitHub Actions)
+        </h2>
+
+        <div className="card flex flex-col gap-3">
+          <p className="text-[13px] leading-snug text-muted">
+            Renderizar video precisa de ffmpeg, que a Vercel nao tem — quem faz
+            esse trabalho e o GitHub Actions. Ele so precisa saber chegar no seu
+            banco e decifrar as chaves.
+          </p>
+
+          {github.error ? (
+            <p className="text-[13px] leading-snug text-amber-400">
+              Nao consegui verificar: {github.error}
+            </p>
+          ) : (
+            <ul className="flex flex-col gap-1.5">
+              {(['DATABASE_URL', 'AUTH_SECRET'] as const).map((name) => (
+                <li key={name} className="flex items-center justify-between gap-3">
+                  <code className="text-[13px]">{name}</code>
+                  <span
+                    className={
+                      github.secrets.includes(name) ? 'text-emerald-400' : 'text-amber-400'
+                    }
+                  >
+                    {github.secrets.includes(name) ? 'cadastrado' : 'faltando'}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          <ActionButton action={setupGithubSecretsAction} className="btn-primary">
+            Configurar o GitHub para mim
+          </ActionButton>
+
+          {github.runs.length > 0 && (
+            <div className="border-t border-line pt-3">
+              <p className="mb-2 text-[12px] font-semibold text-muted">Ultimas execucoes</p>
+              <ul className="flex flex-col gap-1.5">
+                {github.runs.map((run, i) => (
+                  <li key={i} className="flex items-center justify-between gap-3 text-[12px]">
+                    <span className="truncate">{run.name}</span>
+                    <span
+                      className={
+                        run.conclusion === 'success'
+                          ? 'text-emerald-400'
+                          : run.conclusion === null
+                            ? 'text-amber-400'
+                            : 'text-red-400'
+                      }
+                    >
+                      {run.conclusion ?? run.status}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
       </section>
 
       <section className="mb-5">
