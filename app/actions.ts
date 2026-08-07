@@ -220,8 +220,16 @@ export async function generateFromTrendsAction(): Promise<ActionState> {
  */
 async function motorDeRender(): Promise<AppSettings['renderEngine']> {
   const { renderEngine } = await getSettings();
-  if (renderEngine === 'github' && !canDispatch()) return 'manual';
-  return renderEngine;
+  if (renderEngine !== 'github') return renderEngine;
+
+  // Sem token nao ha para onde despachar.
+  if (!canDispatch()) return 'aqui';
+
+  // Com a fila do GitHub parada, despachar e so escolher nao renderizar: o job
+  // e criado e fica esperando uma maquina que nao vem. Renderizar aqui demora
+  // mais, mas termina — e terminar e o unico requisito que importa.
+  const health = queueHealth(await listRecentRuns(10).catch(() => []));
+  return health.stuck ? 'aqui' : 'github';
 }
 
 /**
@@ -242,9 +250,13 @@ async function requestRender(videoId: string): Promise<AppSettings['renderEngine
   if (motor === 'manual') return motor;
 
   if (motor === 'aqui') {
-    // Vai demorar; o `void` evita segurar a resposta, e o status no banco
-    // conta o resto da historia.
-    void renderQueuedVideo(videoId).catch((err) => console.error(err));
+    // Esperar de proposito, e nao disparar em segundo plano: na Vercel a
+    // funcao e congelada assim que a resposta sai, e um render iniciado com
+    // `void` morreria no meio deixando o video preso em "renderizando" — o
+    // mesmo sintoma que a fila travada do GitHub produzia. O botao ja mostra
+    // "aguarde"; se o celular bloquear a tela e a conexao cair, o servidor
+    // termina o trabalho assim mesmo e o resultado aparece na Fila.
+    await renderQueuedVideo(videoId);
     return motor;
   }
 
@@ -274,7 +286,9 @@ export async function approveIdeaAction(ideaId: string): Promise<ActionState> {
       message:
         motor === 'manual'
           ? 'Video na fila. Ele sera renderizado quando voce rodar o caderno do Colab.'
-          : 'Video entrou na fila de renderizacao.',
+          : motor === 'aqui'
+            ? 'Video pronto. Veja na Fila para aprovar e publicar.'
+            : 'Video entrou na fila de renderizacao.',
     };
   } catch (err) {
     return fail(err);
@@ -411,31 +425,26 @@ export async function retryVideoAction(videoId: string): Promise<ActionState> {
   try {
     await guard();
 
-    // Reenviar enquanto a fila do GitHub esta travada so empilha jobs que
-    // ninguem vai executar — e foi o que aconteceu: sete disparos parados
-    // para o mesmo video. Melhor dizer a verdade do que fingir que tentou.
-    if ((await motorDeRender()) === 'github') {
-      const health = queueHealth(await listRecentRuns(10).catch(() => []));
-      if (health.stuck) {
-        return {
-          ok: false,
-          message:
-            `Ja ha ${health.waiting} execucao(oes) parada(s) na fila do GitHub, a mais antiga ha ` +
-            `${health.oldestMinutes} minutos, sem receber maquina. Reenviar so aumenta a fila. ` +
-            'Isso costuma ser franquia de minutos esgotada — veja Configuracoes > Renderizacao.',
-        };
-      }
-    }
-
     await db
       .update(videos)
       .set({ status: 'queued', error: null })
       .where(eq(videos.id, videoId));
 
-    await requestRender(videoId);
+    // Nao ha mais o aviso de "a fila do GitHub esta travada, nao adianta
+    // reenviar": quando ela esta, `motorDeRender` ja desvia para renderizar
+    // aqui. Um botao que renderiza vale mais que um botao que explica.
+    const motor = await requestRender(videoId);
 
     revalidatePath('/fila');
-    return { ok: true, message: 'Renderizacao reiniciada.' };
+    return {
+      ok: true,
+      message:
+        motor === 'aqui'
+          ? 'Video pronto.'
+          : motor === 'manual'
+            ? 'Video de volta na fila. Abra o Colab para renderizar.'
+            : 'Renderizacao reiniciada.',
+    };
   } catch (err) {
     return fail(err);
   }

@@ -13,14 +13,22 @@
  * nenhum, como se a escolha nao valesse.
  */
 export const RENDER_ENGINES = {
+  aqui: 'Aqui mesmo (recomendado)',
   github: 'GitHub Actions',
-  aqui: 'Aqui mesmo (este servidor)',
   manual: 'No Colab, quando eu mandar',
 } as const;
 
 export type RenderEngine = keyof typeof RENDER_ENGINES;
 
-export const DEFAULT_RENDER_ENGINE: RenderEngine = 'github';
+/**
+ * `aqui` e o padrao porque e o unico que nao depende de nada de fora.
+ *
+ * O GitHub Actions foi o padrao ate descobrirmos, na pratica, que uma conta
+ * pode parar de receber runner sem aviso e sem conserto: o job entra em
+ * "queued" e fica la. O painel, esse, sempre existe — e desde que o ffmpeg
+ * viaja junto no pacote, ele consegue renderizar sozinho.
+ */
+export const DEFAULT_RENDER_ENGINE: RenderEngine = 'aqui';
 
 /** Le o valor do formulario aceitando so o que existe de fato. */
 export function parseRenderEngine(value: unknown): RenderEngine {

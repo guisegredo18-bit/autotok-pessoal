@@ -9,7 +9,11 @@ import { approveIdeaAction, rejectIdeaAction } from '@/app/actions';
 export const dynamic = 'force-dynamic';
 // Escrever os roteiros acontece dentro da requisicao desta tela; o padrao de
 // 10s da Vercel cortaria a geracao no meio.
-export const maxDuration = 60;
+// Aprovar uma ideia renderiza o video na hora quando nao ha GitHub Actions
+// para fazer isso. Medido: cinco cenas em 720x1280 custam ~20s de
+// codificacao, mais TTS, download das midias e upload. 300s e o teto da
+// Vercel no plano gratuito e da folga de sobra.
+export const maxDuration = 300;
 
 export default async function IdeasPage() {
   const rows = await db

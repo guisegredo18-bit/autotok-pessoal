@@ -3,9 +3,9 @@
 Analisa as tendências do TikTok, escreve e renderiza vídeos automaticamente, e
 publica na sua conta **depois que você aprova pelo iPhone**.
 
-O celular é o controle remoto: você recebe uma notificação quando um vídeo fica
-pronto, assiste, e toca em aprovar. Renderizar vídeo exige um servidor — quem
-faz o trabalho pesado é o GitHub Actions.
+O celular é o controle remoto: você aprova uma ideia, o vídeo é renderizado ali
+mesmo — o ffmpeg viaja junto com o painel — e em um a dois minutos ele aparece
+pronto na Fila para você assistir e publicar.
 
 **Custo: zero.** Nenhum serviço usado na configuração padrão pede cartão de
 crédito.
@@ -132,24 +132,23 @@ Nenhuma pede cartão de crédito.
 Agora já dá para tocar em **Buscar tendências** e **Gerar ideias** e ver os
 roteiros. O que ainda não funciona é *gravar o vídeo* — falta a Etapa 4.
 
-### Etapa 4 — ligar a renderização (~15 min)
+### Etapa 4 — ligar a renderização (~5 min)
 
-Renderizar vídeo precisa de ffmpeg, que a Vercel não tem. Quem faz esse
-trabalho é o GitHub Actions, e ele precisa de um lugar para guardar o arquivo.
+O painel renderiza sozinho: o ffmpeg vem embutido e a fonte da legenda também.
+Falta só um lugar para guardar o arquivo pronto.
 
 **4a. Armazenamento** — em [dash.cloudflare.com](https://dash.cloudflare.com) →
 R2 → criar bucket → em *Settings* ative o **Public access** (guarde a URL
 `pub-xxx.r2.dev`) → em *Manage R2 API Tokens* crie um token de leitura e escrita.
 
 **4b. Preencher as chaves no painel** — abra o app no seu iPhone, vá em
-**Configurações → Chaves** e preencha:
+**Configurações → Chaves** e preencha o **Armazenamento** com os dados do R2 da
+etapa anterior. Toque em **Salvar chaves**; elas ficam cifradas no seu banco.
 
-- **Armazenamento:** os dados do R2 da etapa anterior
-- **Renderização no GitHub Actions:** um token clássico criado em
-  [github.com/settings/tokens](https://github.com/settings/tokens) com o escopo
-  **repo**, e o repositório (`guisegredo18-bit/autotok-pessoal`)
+E acabou: aprove uma ideia e o vídeo sai pronto em um a dois minutos.
 
-Toque em **Salvar chaves**. Elas ficam cifradas no seu banco de dados.
+O restante desta etapa é opcional — serve para tirar a renderização de cima do
+painel, se um dia você quiser.
 
 **4c. Um toque** — ainda em **Configurações**, na seção *Renderização (GitHub
 Actions)*, toque em **Configurar o GitHub para mim**.

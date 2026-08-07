@@ -203,8 +203,9 @@ export default async function ConfigPage() {
 
         <div className="card flex flex-col gap-3">
           <p className="text-[13px] leading-snug text-muted">
-            Renderizar video precisa de ffmpeg, que a Vercel nao tem — quem faz
-            esse trabalho e o GitHub Actions. Ele so precisa saber chegar no seu
+            O painel ja renderiza sozinho — o ffmpeg viaja junto com ele. Esta
+            secao so importa se voce escolheu <strong>GitHub Actions</strong> em
+            Conteudo &gt; Onde renderizar; ai o robo precisa saber chegar no seu
             banco e decifrar as chaves.
           </p>
 

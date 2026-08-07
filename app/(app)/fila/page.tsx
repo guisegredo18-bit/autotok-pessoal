@@ -20,6 +20,9 @@ import {
 } from '@/app/actions';
 
 export const dynamic = 'force-dynamic';
+// Tentar de novo tambem renderiza aqui mesmo; vale o mesmo teto da tela de
+// ideias.
+export const maxDuration = 300;
 
 /**
  * Quando o GitHub nao entrega maquina, o job fica em "queued" e o video fica

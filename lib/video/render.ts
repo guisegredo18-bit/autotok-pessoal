@@ -6,7 +6,7 @@ import type { Scene } from '@/lib/db/schema';
 import { synthesize } from '@/lib/tts';
 import { downloadAsset, findAsset } from '@/lib/media/stock';
 import { env } from '@/lib/env';
-import { assertFfmpeg, ffmpeg, probeDuration } from './ffmpeg';
+import { FONTS_DIR, assertFfmpeg, ffmpeg, probeDuration } from './ffmpeg';
 import { buildAss, chunkScene } from './subtitles';
 
 /**
@@ -19,9 +19,24 @@ import { buildAss, chunkScene } from './subtitles';
  * nao derruba o video inteiro.
  */
 
-const WIDTH = 1080;
-const HEIGHT = 1920;
+/**
+ * Tamanho do quadro.
+ *
+ * Na Vercel a funcao tem 300 segundos e cerca de um nucleo. Medido num nucleo
+ * so, uma cena de 6s custa ~12s em 1080x1920 e ~4s em 720x1280 — a diferenca
+ * entre um video de 5 cenas levar um minuto ou vinte segundos de codificacao.
+ * O TikTok aceita 720x1280 sem reclamar, e sobrar folga importa mais do que a
+ * resolucao: estourar o limite mata a renderizacao no meio, sem nada pronto.
+ *
+ * Onde ha maquina de verdade (container, Colab, GitHub Actions) vale o 1080.
+ */
+const SERVERLESS = Boolean(process.env.VERCEL);
+const WIDTH = SERVERLESS ? 720 : 1080;
+const HEIGHT = SERVERLESS ? 1280 : 1920;
 const FPS = 30;
+/** O zoom (Ken Burns) parte de um quadro maior e vai fechando ate o alvo. */
+const ZOOM_WIDTH = Math.round(WIDTH * 4 / 3);
+const ZOOM_HEIGHT = Math.round(HEIGHT * 4 / 3);
 /** Sobra no fim de cada cena para a voz nao ser cortada no corte. */
 const TAIL_SECONDS = 0.35;
 
@@ -33,9 +48,26 @@ export type RenderResult = {
   warnings: string[];
 };
 
+/**
+ * De onde vem a narracao e a midia de fundo.
+ *
+ * Injetavel para que o pipeline possa ser exercitado de verdade num teste —
+ * com ffmpeg, arquivos e MP4 no fim — sem depender do Edge TTS e do Pexels
+ * estarem no ar. O que quebra aqui e a montagem, nao a rede, e era justamente
+ * a montagem que nunca tinha sido verificada de ponta a ponta.
+ */
+export type RenderDeps = {
+  synthesize: typeof synthesize;
+  findAsset: typeof findAsset;
+  downloadAsset: typeof downloadAsset;
+};
+
+const REAL_DEPS: RenderDeps = { synthesize, findAsset, downloadAsset };
+
 export async function renderVideo(
   scenes: Scene[],
   onProgress?: (message: string) => void,
+  deps: RenderDeps = REAL_DEPS,
 ): Promise<RenderResult> {
   await assertFfmpeg();
   if (scenes.length === 0) throw new Error('Roteiro sem cenas.');
@@ -52,14 +84,14 @@ export async function renderVideo(
       onProgress?.(`Cena ${i + 1}/${scenes.length}: gerando narracao`);
 
       const narrationFile = `narration_${i}.mp3`;
-      const { audio } = await synthesize(scene.text);
+      const { audio } = await deps.synthesize(scene.text);
       await fs.writeFile(path.join(dir, narrationFile), audio);
 
       const spoken = await probeDuration(narrationFile, dir);
       const duration = Math.round((spoken + TAIL_SECONDS) * 100) / 100;
 
       onProgress?.(`Cena ${i + 1}/${scenes.length}: buscando fundo`);
-      const background = await prepareBackground(dir, i, scene.visual, warnings);
+      const background = await prepareBackground(dir, i, scene.visual, warnings, deps);
 
       const subsFile = `subs_${i}.ass`;
       await fs.writeFile(
@@ -102,6 +134,14 @@ export async function renderVideo(
   }
 }
 
+/**
+ * Escapa um caminho para caber dentro de um argumento de filtro do ffmpeg,
+ * onde `:` separa opcoes e `\` escapa.
+ */
+function escapeFilterPath(value: string): string {
+  return value.replace(/\\/g, '\\\\').replace(/:/g, '\\:').replace(/'/g, "\\'");
+}
+
 type Background =
   | { kind: 'video'; file: string }
   | { kind: 'image'; file: string }
@@ -112,6 +152,7 @@ async function prepareBackground(
   index: number,
   query: string,
   warnings: string[],
+  deps: RenderDeps,
 ): Promise<Background> {
   if (!env.pexelsApiKey) {
     if (index === 0) {
@@ -121,13 +162,13 @@ async function prepareBackground(
   }
 
   try {
-    const asset = await findAsset(query);
+    const asset = await deps.findAsset(query);
     if (!asset) {
       warnings.push(`Sem midia para "${query}" — cena ${index + 1} ficou com fundo liso.`);
       return { kind: 'color' };
     }
 
-    const data = await downloadAsset(asset);
+    const data = await deps.downloadAsset(asset);
     const file = asset.kind === 'video' ? `bg_${index}.mp4` : `bg_${index}.jpg`;
     await fs.writeFile(path.join(dir, file), data);
     return { kind: asset.kind, file };
@@ -152,7 +193,10 @@ async function renderScene(opts: {
   // Leve escurecida e saturacao a mais: melhora a leitura da legenda branca e
   // deixa a imagem com cara de video editado em vez de foto de banco.
   const grade = 'eq=brightness=-0.05:saturation=1.15';
-  const subtitles = `subtitles=${subsFile}`;
+  // fontsdir e o que faz a legenda existir onde nao ha fonte instalada — e a
+  // Vercel nao tem nenhuma. Sem isso o libass devolve o quadro limpo, sem
+  // erro nenhum para denunciar o que faltou.
+  const subtitles = `subtitles=${subsFile}:fontsdir=${escapeFilterPath(FONTS_DIR)}`;
 
   const input: string[] = [];
   let videoFilter: string;
@@ -162,7 +206,8 @@ async function renderScene(opts: {
     const frames = Math.max(1, Math.round(duration * FPS));
     input.push('-loop', '1', '-i', background.file);
     videoFilter =
-      `[0:v]scale=1440:2560:force_original_aspect_ratio=increase,crop=1440:2560,` +
+      `[0:v]scale=${ZOOM_WIDTH}:${ZOOM_HEIGHT}:force_original_aspect_ratio=increase,` +
+      `crop=${ZOOM_WIDTH}:${ZOOM_HEIGHT},` +
       `zoompan=z='min(zoom+0.0006,1.12)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':` +
       `d=${frames}:s=${WIDTH}x${HEIGHT}:fps=${FPS},${grade},setsar=1,${subtitles}[v]`;
   } else if (background.kind === 'video') {

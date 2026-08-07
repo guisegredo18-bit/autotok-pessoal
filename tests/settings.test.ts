@@ -15,14 +15,18 @@ function merge(row: Partial<AppSettings>): AppSettings {
 }
 
 describe('AppSettings', () => {
-  test('linha salva antes do campo existir continua no GitHub Actions', () => {
-    // Uma configuracao real gravada quando `renderEngine` nao existia.
+  test('linha salva antes do campo existir passa a renderizar sozinha', () => {
+    // Uma configuracao real gravada quando `renderEngine` nao existia. O padrao
+    // era `github` e virou `aqui` de proposito: quem tem uma linha antiga so
+    // conheceu o mundo em que o Actions renderizava, e e justamente esse mundo
+    // que pode ter parado de entregar maquina sem aviso. Cair no motor que nao
+    // depende de ninguem e o comportamento seguro.
     const antiga = {
       niche: 'receitas rapidas',
       template: 'viral' as const,
       minScore: 70,
     };
-    assert.equal(merge(antiga).renderEngine, 'github');
+    assert.equal(merge(antiga).renderEngine, 'aqui');
   });
 
   test('a escolha salva ganha do padrao', () => {

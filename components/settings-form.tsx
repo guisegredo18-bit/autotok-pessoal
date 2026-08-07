@@ -150,10 +150,10 @@ export function SettingsForm({ settings }: { settings: AppSettings }) {
           ))}
         </select>
         <p className="mt-1 text-[12px] leading-snug text-muted">
-          &quot;Aqui mesmo&quot; exige um servidor com ffmpeg — a Vercel nao tem
-          ffmpeg nem tempo de request suficiente. Se o Actions parou de receber
-          maquina, escolha <strong>Colab</strong>: o video espera na fila e voce
-          renderiza abrindo o caderno pelo celular.
+          <strong>Aqui mesmo</strong> nao depende de mais nada: o ffmpeg vem
+          junto no proprio painel. Aprovar uma ideia leva de um a dois minutos e
+          o video ja sai pronto. As outras duas opcoes existem para quem tem
+          maquina sobrando — e o Colab, para quem quiser 1080p.
         </p>
       </div>
 
