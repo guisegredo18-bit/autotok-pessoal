@@ -6,6 +6,7 @@ import { env } from '@/lib/env';
 import { hydrateEnv } from '@/lib/secrets';
 import { listRecentRuns, queueHealth } from '@/lib/github/repo';
 import { getSettings } from '@/lib/db/settings';
+import { renderProgress } from '@/lib/db/jobs';
 import { colabUrl } from '@/lib/colab';
 import { getAccount } from '@/lib/tiktok/account';
 import { ActionButton } from '@/components/action-button';
@@ -67,6 +68,13 @@ export default async function QueuePage() {
 
   const { renderEngine } = await getSettings();
   const colab = colabUrl();
+
+  // Um render morto no meio nao grava erro nenhum — a funcao simplesmente
+  // deixa de existir. O registro de execucao e o unico lugar que sabe em que
+  // passo ele estava e ha quanto tempo parou de dar sinal.
+  const progresso = await renderProgress(
+    rows.filter((v) => v.status === 'rendering').map((v) => v.id),
+  ).catch(() => new Map());
   const esperandoColab =
     renderEngine === 'manual' && rows.some((v) => v.status === 'queued');
 
@@ -197,7 +205,10 @@ export default async function QueuePage() {
                     ? 'Renderizacao falhou'
                     : esperandoColab && video.status === 'queued'
                       ? 'Esperando voce abrir o Colab'
-                      : 'Renderizando… atualize em alguns minutos'}
+                      : progresso.get(video.id)?.stalled
+                        ? `Parou ha ${progresso.get(video.id)!.silentMinutes} min`
+                        : (progresso.get(video.id)?.step ??
+                          'Renderizando… atualize em alguns minutos')}
                 </div>
               )}
 
@@ -241,6 +252,24 @@ export default async function QueuePage() {
                     GitHub Actions nunca rodou, o video fica preso nesse estado
                     sem nenhum erro para justificar um botao de "tentar de
                     novo". */}
+                {progresso.get(video.id)?.stalled && (
+                  <>
+                    <p className="text-center text-[12px] leading-snug text-amber-400">
+                      Sem sinal ha {progresso.get(video.id)!.silentMinutes} minutos
+                      {progresso.get(video.id)?.step
+                        ? ` — parou em "${progresso.get(video.id)!.step}"`
+                        : ''}
+                      . A renderizacao provavelmente estourou o tempo do servidor.
+                    </p>
+                    <ActionButton
+                      action={retryVideoAction.bind(null, video.id)}
+                      className="btn-ghost"
+                    >
+                      Renderizar de novo
+                    </ActionButton>
+                  </>
+                )}
+
                 {(video.status === 'failed' || video.status === 'queued') && (
                   <ActionButton
                     action={retryVideoAction.bind(null, video.id)}

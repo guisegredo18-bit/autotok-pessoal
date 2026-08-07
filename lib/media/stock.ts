@@ -28,17 +28,52 @@ async function getJson(url: string): Promise<any> {
   return res.json();
 }
 
+/**
+ * Altura minima aceitavel de um clipe, quando ninguem diz qual e o alvo.
+ *
+ * Importa mais do que parece: o Pexels oferece o mesmo clipe em varias
+ * resolucoes, e pedir a maior significa baixar 20 a 80 MB por cena para depois
+ * reduzir tudo na hora de renderizar. Cinco cenas assim eram centenas de
+ * megabytes numa funcao com poucos minutos de vida — o download virava o gargalo
+ * do render inteiro.
+ */
+const DEFAULT_MIN_HEIGHT = 1280;
+
 /** Procura o melhor fundo vertical para um termo de busca. */
-export async function findAsset(query: string): Promise<StockAsset | null> {
+export async function findAsset(
+  query: string,
+  minHeight = DEFAULT_MIN_HEIGHT,
+): Promise<StockAsset | null> {
   const term = encodeURIComponent(query.trim());
 
-  const video = await findVideo(term).catch(() => null);
+  const video = await findVideo(term, minHeight).catch(() => null);
   if (video) return video;
 
   return findImage(term).catch(() => null);
 }
 
-async function findVideo(term: string): Promise<StockAsset | null> {
+/**
+ * Entre os arquivos de um clipe, o menor que ainda cobre a altura alvo.
+ *
+ * Exportada porque e a decisao que define o tamanho do download, e ela precisa
+ * ser verificavel sem chamar o Pexels.
+ */
+export function pickVideoFile(files: any[], minHeight: number): any | null {
+  const verticais = (files ?? []).filter(
+    (f) => Number(f?.height) > Number(f?.width) && f?.link,
+  );
+  if (verticais.length === 0) return null;
+
+  const cobrem = verticais
+    .filter((f) => Number(f.height) >= minHeight)
+    .sort((a, b) => Number(a.height) - Number(b.height));
+
+  // Se nenhum alcanca o alvo, o maior disponivel e o melhor que da para fazer:
+  // esticar um pouco incomoda menos do que ficar sem fundo.
+  return cobrem[0] ?? verticais.sort((a, b) => Number(b.height) - Number(a.height))[0];
+}
+
+async function findVideo(term: string, minHeight: number): Promise<StockAsset | null> {
   const json = await getJson(
     `https://api.pexels.com/videos/search?query=${term}&orientation=portrait&size=medium&per_page=8`,
   );
@@ -49,11 +84,7 @@ async function findVideo(term: string): Promise<StockAsset | null> {
     // inteira e obrigaria loop visivel.
     if (Number(v?.duration ?? 0) < 5) continue;
 
-    const files: any[] = v?.video_files ?? [];
-    const vertical = files
-      .filter((f) => f?.height > f?.width && f?.height >= 1080)
-      .sort((a, b) => a.height - b.height)[0]
-      ?? files.filter((f) => f?.height > f?.width).sort((a, b) => b.height - a.height)[0];
+    const vertical = pickVideoFile(v?.video_files ?? [], minHeight);
 
     if (vertical?.link) {
       return {
@@ -85,9 +116,36 @@ async function findImage(term: string): Promise<StockAsset | null> {
   };
 }
 
-/** Baixa o asset para memoria. */
-export async function downloadAsset(asset: StockAsset): Promise<Buffer> {
-  const res = await fetch(asset.url, { signal: AbortSignal.timeout(90_000) });
+/**
+ * Teto por arquivo de fundo.
+ *
+ * Um clipe grande nao da erro: ele so consome o tempo todo da renderizacao
+ * baixando, e o video fica preso em "renderizando" ate a funcao ser morta —
+ * sem nada gravado que explique o que houve. Recusar cedo transforma isso numa
+ * troca por outra midia.
+ */
+export const MAX_ASSET_BYTES = 25 * 1024 * 1024;
+
+/** Baixa o asset para memoria, recusando o que for grande demais. */
+export async function downloadAsset(
+  asset: StockAsset,
+  maxBytes = MAX_ASSET_BYTES,
+): Promise<Buffer> {
+  const res = await fetch(asset.url, { signal: AbortSignal.timeout(60_000) });
   if (!res.ok) throw new Error(`Falha ao baixar midia: HTTP ${res.status}`);
-  return Buffer.from(await res.arrayBuffer());
+
+  const declarado = Number(res.headers.get('content-length') ?? 0);
+  if (declarado > maxBytes) {
+    throw new Error(
+      `midia de ${(declarado / 1024 / 1024).toFixed(0)}MB e grande demais ` +
+        `(teto de ${(maxBytes / 1024 / 1024).toFixed(0)}MB)`,
+    );
+  }
+
+  const data = Buffer.from(await res.arrayBuffer());
+  // Nem todo servidor manda content-length; a checagem final e no que chegou.
+  if (data.length > maxBytes) {
+    throw new Error(`midia de ${(data.length / 1024 / 1024).toFixed(0)}MB e grande demais`);
+  }
+  return data;
 }

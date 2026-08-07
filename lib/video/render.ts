@@ -162,7 +162,9 @@ async function prepareBackground(
   }
 
   try {
-    const asset = await deps.findAsset(query);
+    // A altura do render e o alvo: pedir mais so aumenta o download para
+    // depois reduzir na hora de compor.
+    const asset = await deps.findAsset(query, HEIGHT);
     if (!asset) {
       warnings.push(`Sem midia para "${query}" — cena ${index + 1} ficou com fundo liso.`);
       return { kind: 'color' };
@@ -173,6 +175,21 @@ async function prepareBackground(
     await fs.writeFile(path.join(dir, file), data);
     return { kind: asset.kind, file };
   } catch (err) {
+    // Fundo liso e o ultimo recurso, nao o primeiro. Um clipe recusado por
+    // tamanho tem substituto obvio — uma foto, que pesa uma fracao disso — e
+    // trocar sai muito mais barato do que entregar a cena sem imagem.
+    const foto = await deps.findAsset(query, 0).catch(() => null);
+    if (foto && foto.kind === 'image') {
+      try {
+        const data = await deps.downloadAsset(foto);
+        const file = `bg_${index}.jpg`;
+        await fs.writeFile(path.join(dir, file), data);
+        return { kind: 'image', file };
+      } catch {
+        // Cai no aviso abaixo.
+      }
+    }
+
     warnings.push(
       `Falha ao buscar fundo de "${query}" (${err instanceof Error ? err.message : err}).`,
     );
