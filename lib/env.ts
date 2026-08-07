@@ -90,8 +90,12 @@ export const env = {
 
   pexelsApiKey: process.env.PEXELS_API_KEY ?? '',
 
-  ttsProvider: (process.env.TTS_PROVIDER as 'edge' | 'elevenlabs') || 'edge',
+  ttsProvider: (process.env.TTS_PROVIDER as 'edge' | 'google' | 'elevenlabs') || 'edge',
   ttsVoice: process.env.TTS_VOICE || 'pt-BR-ThalitaMultilingualNeural',
+  /** Trocavel para apontar a um proxy — e para os testes. */
+  googleTtsUrl: (
+    process.env.GOOGLE_TTS_URL || 'https://translate.google.com/translate_tts'
+  ).replace(/\/$/, ''),
   elevenLabsApiKey: process.env.ELEVENLABS_API_KEY ?? '',
   elevenLabsVoiceId: process.env.ELEVENLABS_VOICE_ID ?? '',
 
@@ -149,7 +153,7 @@ export function integrationStatus() {
     tiktok: Boolean(env.tiktokClientKey && env.tiktokClientSecret && env.tiktokRedirectUri),
     storage: env.storageDriver === 'local' || Boolean(env.s3Bucket && env.s3AccessKeyId && env.s3SecretAccessKey),
     stock: Boolean(env.pexelsApiKey),
-    tts: env.ttsProvider === 'edge' || Boolean(env.elevenLabsApiKey),
+    tts: env.ttsProvider !== 'elevenlabs' || Boolean(env.elevenLabsApiKey),
     actions: Boolean(env.githubToken && env.githubRepo),
     push: Boolean(env.ntfyTopic),
   };
