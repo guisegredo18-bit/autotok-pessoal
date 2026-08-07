@@ -1,18 +1,18 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { DEFAULT_SETTINGS, type AppSettings } from '@/lib/db/settings';
+import { DEFAULT_SETTINGS, applyStored, type AppSettings } from '@/lib/db/settings';
 
 /**
  * `getSettings` devolve `{ ...DEFAULT_SETTINGS, ...linha }` para que campos
- * novos apareçam sem migration. O risco disso e um campo novo cujo padrao
- * errado muda o comportamento de quem ja usava o app — e `renderEngine` e
- * exatamente esse caso: se uma linha antiga voltasse com o campo indefinido,
- * `usaGithub()` leria diferente de "github" e o painel passaria a renderizar
- * no proprio processo, onde nao ha ffmpeg. Estes testes fixam a mesclagem.
+ * novos apareçam sem migration. O preco disso e que um valor gravado errado no
+ * passado sobrevive para sempre — e foi o que aconteceu com `renderEngine`,
+ * gravado como "github" por um formulario que so sabia ler duas opcoes.
+ *
+ * Distinguir "valor que alguem escolheu" de "valor que apareceu ali" e o que
+ * estes testes protegem: sem essa distincao, corrigir o padrao nao alcanca
+ * justamente quem foi mordido pelo bug.
  */
-function merge(row: Partial<AppSettings>): AppSettings {
-  return { ...DEFAULT_SETTINGS, ...row };
-}
+const merge = applyStored;
 
 describe('AppSettings', () => {
   test('linha salva antes do campo existir passa a renderizar sozinha', () => {
@@ -29,13 +29,28 @@ describe('AppSettings', () => {
     assert.equal(merge(antiga).renderEngine, 'aqui');
   });
 
-  test('a escolha salva ganha do padrao', () => {
-    assert.equal(merge({ renderEngine: 'aqui' }).renderEngine, 'aqui');
-    assert.equal(merge({ renderEngine: 'manual' }).renderEngine, 'manual');
+  test('escolha de gente ganha do padrao', () => {
+    assert.equal(
+      merge({ renderEngine: 'manual', renderEngineChosen: true }).renderEngine,
+      'manual',
+    );
+    // Inclusive quando a escolha e voltar para o GitHub Actions.
+    assert.equal(
+      merge({ renderEngine: 'github', renderEngineChosen: true }).renderEngine,
+      'github',
+    );
+  });
+
+  test('motor gravado sem escolha explicita e descartado', () => {
+    // O formulario antigo gravava "github" para qualquer opcao selecionada.
+    // Obedecer a esse valor prenderia a pessoa no motor que nao entrega
+    // maquina — e foi exatamente o que aconteceu.
+    assert.equal(merge({ renderEngine: 'github' }).renderEngine, 'aqui');
+    assert.equal(merge({ renderEngine: 'manual' }).renderEngine, 'aqui');
   });
 
   test('mesclar preserva os campos que a linha nao traz', () => {
-    const merged = merge({ renderEngine: 'aqui' });
+    const merged = merge({ renderEngine: 'aqui', renderEngineChosen: true });
     assert.equal(merged.niche, DEFAULT_SETTINGS.niche);
     assert.equal(merged.targetDuration, DEFAULT_SETTINGS.targetDuration);
   });

@@ -40,6 +40,16 @@ export type AppSettings = {
    * inventado por tentar renderizar onde nao da.
    */
   renderEngine: RenderEngine;
+  /**
+   * Se `renderEngine` foi de fato escolhido por alguem.
+   *
+   * Ate a versao que embutiu o ffmpeg no painel, o formulario lia esse campo
+   * com um ternario que so conhecia dois valores e gravava "github" para
+   * qualquer outra escolha. Entao um "github" sem esta marca nao e uma
+   * preferencia: e o resultado de um bug, e seguir obedecendo a ele deixaria a
+   * pessoa presa no motor que nao entrega maquina.
+   */
+  renderEngineChosen: boolean;
 };
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -54,6 +64,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   captionSignature: '',
   blockedWords: [],
   renderEngine: DEFAULT_RENDER_ENGINE,
+  renderEngineChosen: false,
 };
 
 const KEY = 'app';
@@ -61,13 +72,23 @@ const KEY = 'app';
 export async function getSettings(): Promise<AppSettings> {
   const [row] = await db.select().from(settings).where(eq(settings.key, KEY)).limit(1);
   if (!row) return { ...DEFAULT_SETTINGS };
+  return applyStored(row.value as Partial<AppSettings>);
+}
+
+/** Mesclagem com o padrao, exportada porque e onde mora a migracao. */
+export function applyStored(stored: Partial<AppSettings>): AppSettings {
   // Mesclar com o padrao garante que campos novos apareçam sem migration.
-  return { ...DEFAULT_SETTINGS, ...(row.value as Partial<AppSettings>) };
+  const merged = { ...DEFAULT_SETTINGS, ...stored };
+  if (!merged.renderEngineChosen) merged.renderEngine = DEFAULT_RENDER_ENGINE;
+  return merged;
 }
 
 export async function saveSettings(patch: Partial<AppSettings>): Promise<AppSettings> {
   const current = await getSettings();
   const next = { ...current, ...patch };
+  // Salvar pelo formulario e o ato de escolher: a partir daqui o valor e
+  // preferencia de gente, e nenhuma migracao futura deve passar por cima.
+  if (patch.renderEngine !== undefined) next.renderEngineChosen = true;
   await db
     .insert(settings)
     .values({ key: KEY, value: next })
