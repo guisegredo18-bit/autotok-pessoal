@@ -64,13 +64,27 @@ export type RenderDeps = {
 
 const REAL_DEPS: RenderDeps = { synthesize, findAsset, downloadAsset };
 
+/**
+ * Quanto tempo a montagem pode levar antes de fechar com o que ja tem.
+ *
+ * A funcao da Vercel e morta ao bater o teto, e morta ela nao grava nada: nem
+ * erro, nem as cenas prontas. O video ficava em "renderizando" para sempre, e
+ * horas de espera terminavam em zero. Guardar uma margem e parar por conta
+ * propria troca isso por um video mais curto — que e um video.
+ */
+const BUDGET_MS = SERVERLESS ? 200_000 : 15 * 60_000;
+
 export async function renderVideo(
   scenes: Scene[],
   onProgress?: (message: string) => void,
   deps: RenderDeps = REAL_DEPS,
+  budgetMs: number = BUDGET_MS,
 ): Promise<RenderResult> {
   await assertFfmpeg();
   if (scenes.length === 0) throw new Error('Roteiro sem cenas.');
+
+  const inicio = Date.now();
+  const decorrido = () => Math.round((Date.now() - inicio) / 1000);
 
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'autotok-'));
   const warnings: string[] = [];
@@ -90,7 +104,7 @@ export async function renderVideo(
      * lento.
      */
     onProgress?.(`Preparando ${scenes.length} cenas (narracao e imagens)`);
-    const preparadas = await Promise.all(
+    const resultados = await Promise.allSettled(
       scenes.map(async (scene, i) => {
         const narrationFile = `narration_${i}.mp3`;
         const { audio } = await deps.synthesize(scene.text);
@@ -100,6 +114,25 @@ export async function renderVideo(
         return { scene, i, narrationFile, background };
       }),
     );
+
+    // Uma cena que falhou nao pode levar as outras junto: quatro cenas boas
+    // valem muito mais que nenhuma, e a narracao e o servico mais instavel de
+    // toda a cadeia — foi ela que ja derrubou o app inteiro uma vez.
+    const preparadas = resultados.flatMap((r) => (r.status === 'fulfilled' ? [r.value] : []));
+    for (const r of resultados) {
+      if (r.status === 'rejected') {
+        const motivo = r.reason instanceof Error ? r.reason.message : String(r.reason);
+        warnings.push(`Uma cena ficou de fora: ${motivo.slice(0, 200)}`);
+      }
+    }
+
+    if (preparadas.length === 0) {
+      // Todas falharam pelo mesmo motivo; repetir e o que explica o que houve.
+      const motivo = resultados[0].status === 'rejected'
+        ? String((resultados[0] as PromiseRejectedResult).reason)
+        : 'motivo desconhecido';
+      throw new Error(`Nenhuma cena pode ser preparada. ${motivo.slice(0, 400)}`);
+    }
 
     const clips: string[] = [];
     let total = 0;
@@ -114,15 +147,27 @@ export async function renderVideo(
         buildAss(chunkScene(scene.text, 0, spoken)),
       );
 
-      onProgress?.(`Cena ${i + 1}/${scenes.length}: renderizando`);
+      onProgress?.(`Cena ${i + 1}/${scenes.length}: renderizando (${decorrido()}s)`);
       const clip = `scene_${i}.mp4`;
       await renderScene({ dir, background, narrationFile, subsFile, duration, out: clip });
 
       clips.push(clip);
       total += duration;
+
+      // A checagem vem depois de gravar a cena: uma cena a mais so entra se
+      // couber inteira, e o que ja esta pronto nunca e jogado fora.
+      const restantes = preparadas.length - clips.length;
+      if (restantes > 0 && Date.now() - inicio > budgetMs) {
+        warnings.push(
+          `O video saiu com ${clips.length} de ${preparadas.length} cenas: ` +
+            `o tempo do servidor acabou em ${decorrido()}s. Renderize de novo para tentar inteiro.`,
+        );
+        onProgress?.(`Fechando com ${clips.length} cenas — tempo esgotado`);
+        break;
+      }
     }
 
-    onProgress?.('Juntando as cenas');
+    onProgress?.(`Juntando ${clips.length} cena(s) (${decorrido()}s)`);
     await fs.writeFile(
       path.join(dir, 'list.txt'),
       clips.map((c) => `file '${c}'`).join('\n') + '\n',

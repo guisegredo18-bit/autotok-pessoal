@@ -134,6 +134,96 @@ describe('renderVideo', () => {
     assert.ok(claros > 500, `so ${claros} pixels claros — a legenda nao foi desenhada`);
   });
 
+  test('sem tempo para tudo, entrega as cenas que ficaram prontas', async () => {
+    // Estourar o teto da funcao matava o processo sem gravar nada: nem erro,
+    // nem as cenas ja montadas. Horas de espera terminavam em zero. Um video
+    // mais curto e um video.
+    const passos: string[] = [];
+    const resultado = await renderVideo(
+      [
+        { text: 'primeira cena', visual: 'ceu' },
+        { text: 'segunda cena', visual: 'cidade' },
+        { text: 'terceira cena', visual: 'praia' },
+      ] as any,
+      (m) => passos.push(m),
+      deps,
+      1, // prazo que ja acabou: fecha na primeira cena inteira
+    );
+
+    assert.ok(resultado.video.length > 10_000, 'nao entregou video nenhum');
+    assert.equal(
+      resultado.warnings.length,
+      1,
+      `esperava um aviso sobre o corte: ${JSON.stringify(resultado.warnings)}`,
+    );
+    assert.match(resultado.warnings[0], /1 de 3 cenas/);
+    assert.ok(passos.some((p) => /tempo esgotado/.test(p)));
+
+    // Uma cena de 2s, e nao as tres.
+    assert.ok(resultado.durationSeconds < 3, `duracao ${resultado.durationSeconds}s`);
+  });
+
+  test('com prazo de sobra, nenhuma cena e cortada', async () => {
+    const resultado = await renderVideo(
+      [
+        { text: 'primeira cena', visual: 'ceu' },
+        { text: 'segunda cena', visual: 'cidade' },
+      ] as any,
+      undefined,
+      deps,
+      10 * 60_000,
+    );
+    assert.deepEqual(resultado.warnings, []);
+    assert.ok(resultado.durationSeconds > 4, `duracao ${resultado.durationSeconds}s`);
+  });
+
+  test('uma cena que falha nao derruba as outras', async () => {
+    // A narracao e o servico mais instavel da cadeia — ja parou o app inteiro
+    // uma vez. Quatro cenas boas valem muito mais que nenhuma.
+    let chamada = 0;
+    const instavel = {
+      ...deps,
+      synthesize: async (texto: string) => {
+        if (++chamada === 2) throw new Error('a Microsoft recusou a conexao');
+        return deps.synthesize(texto);
+      },
+    };
+
+    const resultado = await renderVideo(
+      [
+        { text: 'primeira cena', visual: 'ceu' },
+        { text: 'segunda cena', visual: 'cidade' },
+        { text: 'terceira cena', visual: 'praia' },
+      ] as any,
+      undefined,
+      instavel as any,
+    );
+
+    assert.ok(resultado.video.length > 10_000);
+    assert.ok(
+      resultado.warnings.some((w) => /ficou de fora.*Microsoft/.test(w)),
+      `o aviso nao explica a cena perdida: ${JSON.stringify(resultado.warnings)}`,
+    );
+    // Duas cenas de 2s sobreviveram.
+    assert.ok(
+      resultado.durationSeconds > 4 && resultado.durationSeconds < 6,
+      `duracao ${resultado.durationSeconds}s`,
+    );
+  });
+
+  test('se nenhuma cena pode ser preparada, o erro diz o motivo', async () => {
+    const quebrado = {
+      ...deps,
+      synthesize: async () => {
+        throw new Error('a Microsoft recusou a conexao');
+      },
+    };
+    await assert.rejects(
+      () => renderVideo([{ text: 'unica', visual: 'ceu' }] as any, undefined, quebrado as any),
+      /Nenhuma cena.*Microsoft/s,
+    );
+  });
+
   test('roteiro sem cenas e recusado em vez de gerar arquivo vazio', async () => {
     await assert.rejects(() => renderVideo([], undefined, deps), /sem cenas/i);
   });
