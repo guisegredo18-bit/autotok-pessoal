@@ -12,7 +12,7 @@ import { getAccount } from '@/lib/tiktok/account';
 import { ActionButton } from '@/components/action-button';
 import { AutoRefresh } from '@/components/auto-refresh';
 import { CaptionEditor } from '@/components/caption-editor';
-import { EmptyState, PageHeader, StatusPill, timeAgo } from '@/components/ui';
+import { EmptyState, PageHeader, StatusPill, duration, timeAgo } from '@/components/ui';
 import {
   clearQueueAction,
   publishVideoAction,
@@ -84,6 +84,14 @@ export default async function QueuePage() {
    */
   const morto = (id: string, status: string) =>
     status === 'rendering' && (progresso.get(id)?.stalled ?? !progresso.has(id));
+
+  /** O que dizer no lugar do player quando a renderizacao morreu. */
+  const interrompido = (id: string) => {
+    const p = progresso.get(id);
+    if (!p) return 'Renderizacao interrompida';
+    const quando = `parou ha ${duration(p.silentMinutes)}`;
+    return p.step ? `${quando}, em "${p.step}"` : `Renderizacao ${quando}`;
+  };
   const esperandoColab =
     renderEngine === 'manual' && rows.some((v) => v.status === 'queued');
 
@@ -215,7 +223,7 @@ export default async function QueuePage() {
                     : esperandoColab && video.status === 'queued'
                       ? 'Esperando voce abrir o Colab'
                       : morto(video.id, video.status)
-                        ? 'Renderizacao interrompida'
+                        ? interrompido(video.id)
                         : (progresso.get(video.id)?.step ??
                           'Renderizando… atualize em alguns minutos')}
                 </div>
@@ -265,7 +273,7 @@ export default async function QueuePage() {
                   <>
                     <p className="text-center text-[12px] leading-snug text-amber-400">
                       {progresso.get(video.id)
-                        ? `Sem sinal ha ${progresso.get(video.id)!.silentMinutes} minutos`
+                        ? `Sem sinal ha ${duration(progresso.get(video.id)!.silentMinutes)}`
                         : 'Nenhum processo esta renderizando este video'}
                       {progresso.get(video.id)?.step
                         ? ` — parou em "${progresso.get(video.id)!.step}"`

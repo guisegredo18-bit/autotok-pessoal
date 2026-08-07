@@ -1,4 +1,7 @@
 import Link from 'next/link';
+import { duration } from '@/lib/format';
+
+export { duration };
 
 export function PageHeader({
   title,
@@ -99,11 +102,6 @@ export function compact(value: number | null | undefined): string {
 
 export function timeAgo(date: Date | string | null | undefined): string {
   if (!date) return '—';
-  const then = new Date(date).getTime();
-  const minutes = Math.round((Date.now() - then) / 60_000);
-  if (minutes < 1) return 'agora';
-  if (minutes < 60) return `${minutes} min`;
-  const hours = Math.round(minutes / 60);
-  if (hours < 24) return `${hours}h`;
-  return `${Math.round(hours / 24)}d`;
+  return duration(Math.round((Date.now() - new Date(date).getTime()) / 60_000));
 }
+
