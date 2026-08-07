@@ -76,22 +76,37 @@ export async function renderVideo(
   const warnings: string[] = [];
 
   try {
+    /**
+     * Narracao e fundo de todas as cenas ao mesmo tempo.
+     *
+     * Antes cada cena esperava a sua vez: cinco narracoes, cinco buscas e
+     * cinco downloads, um atras do outro. Era o grosso do tempo de um render —
+     * e tempo de espera de rede, nao de trabalho, entao serializar nao comprava
+     * nada. Numa funcao com poucos minutos de vida, era a diferenca entre
+     * terminar e ser morta no meio.
+     *
+     * A codificacao continua uma de cada vez logo abaixo: aquilo e CPU, e o
+     * servidor tem praticamente um nucleo — disputar so deixaria tudo mais
+     * lento.
+     */
+    onProgress?.(`Preparando ${scenes.length} cenas (narracao e imagens)`);
+    const preparadas = await Promise.all(
+      scenes.map(async (scene, i) => {
+        const narrationFile = `narration_${i}.mp3`;
+        const { audio } = await deps.synthesize(scene.text);
+        await fs.writeFile(path.join(dir, narrationFile), audio);
+
+        const background = await prepareBackground(dir, i, scene.visual, warnings, deps);
+        return { scene, i, narrationFile, background };
+      }),
+    );
+
     const clips: string[] = [];
     let total = 0;
 
-    for (let i = 0; i < scenes.length; i++) {
-      const scene = scenes[i];
-      onProgress?.(`Cena ${i + 1}/${scenes.length}: gerando narracao`);
-
-      const narrationFile = `narration_${i}.mp3`;
-      const { audio } = await deps.synthesize(scene.text);
-      await fs.writeFile(path.join(dir, narrationFile), audio);
-
+    for (const { scene, i, narrationFile, background } of preparadas) {
       const spoken = await probeDuration(narrationFile, dir);
       const duration = Math.round((spoken + TAIL_SECONDS) * 100) / 100;
-
-      onProgress?.(`Cena ${i + 1}/${scenes.length}: buscando fundo`);
-      const background = await prepareBackground(dir, i, scene.visual, warnings, deps);
 
       const subsFile = `subs_${i}.ass`;
       await fs.writeFile(

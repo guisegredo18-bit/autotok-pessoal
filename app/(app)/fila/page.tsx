@@ -75,6 +75,15 @@ export default async function QueuePage() {
   const progresso = await renderProgress(
     rows.filter((v) => v.status === 'rendering').map((v) => v.id),
   ).catch(() => new Map());
+
+  /**
+   * Um render vivo sempre tem um registro de execucao em andamento — o status
+   * "renderizando" so e gravado de dentro dele. Entao "renderizando" sem
+   * registro nenhum nao e lentidao: e um processo que nao existe mais, e o
+   * video ficaria ali para sempre esperando por ele.
+   */
+  const morto = (id: string, status: string) =>
+    status === 'rendering' && (progresso.get(id)?.stalled ?? !progresso.has(id));
   const esperandoColab =
     renderEngine === 'manual' && rows.some((v) => v.status === 'queued');
 
@@ -205,8 +214,8 @@ export default async function QueuePage() {
                     ? 'Renderizacao falhou'
                     : esperandoColab && video.status === 'queued'
                       ? 'Esperando voce abrir o Colab'
-                      : progresso.get(video.id)?.stalled
-                        ? `Parou ha ${progresso.get(video.id)!.silentMinutes} min`
+                      : morto(video.id, video.status)
+                        ? 'Renderizacao interrompida'
                         : (progresso.get(video.id)?.step ??
                           'Renderizando… atualize em alguns minutos')}
                 </div>
@@ -252,14 +261,16 @@ export default async function QueuePage() {
                     GitHub Actions nunca rodou, o video fica preso nesse estado
                     sem nenhum erro para justificar um botao de "tentar de
                     novo". */}
-                {progresso.get(video.id)?.stalled && (
+                {morto(video.id, video.status) && (
                   <>
                     <p className="text-center text-[12px] leading-snug text-amber-400">
-                      Sem sinal ha {progresso.get(video.id)!.silentMinutes} minutos
+                      {progresso.get(video.id)
+                        ? `Sem sinal ha ${progresso.get(video.id)!.silentMinutes} minutos`
+                        : 'Nenhum processo esta renderizando este video'}
                       {progresso.get(video.id)?.step
                         ? ` — parou em "${progresso.get(video.id)!.step}"`
                         : ''}
-                      . A renderizacao provavelmente estourou o tempo do servidor.
+                      . Provavelmente estourou o tempo do servidor.
                     </p>
                     <ActionButton
                       action={retryVideoAction.bind(null, video.id)}

@@ -88,6 +88,13 @@ describe('renderVideo', () => {
     assert.ok(resultado.thumbnail.length > 1_000, 'a capa saiu vazia');
     assert.deepEqual(resultado.warnings, [], 'nao deveria haver avisos com midia disponivel');
     assert.ok(passos.length > 0, 'o progresso nao foi reportado');
+    // As cenas sao preparadas juntas e codificadas uma a uma; o progresso tem
+    // de refletir isso, senao a Fila mostra um passo que nao existe mais.
+    assert.match(passos[0], /Preparando 2 cenas/);
+    assert.ok(
+      passos.some((p) => /Cena 2\/2: renderizando/.test(p)),
+      `nao reportou a codificacao de cada cena: ${passos.join(' | ')}`,
+    );
 
     // As duas narracoes de 2s, mais a sobra de 0.35s em cada uma.
     assert.ok(
