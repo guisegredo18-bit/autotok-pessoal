@@ -16,6 +16,14 @@ sem terminal — ou **[pelo computador](#instalação-pelo-computador)**, se pre
 Também acompanha suas **[comissões de afiliado](#painel-de-comissões-amazon--hotmart)**
 da Amazon e da Hotmart, em dólar, na aba **Grana**.
 
+> **Há um segundo aplicativo neste repositório.** A pasta
+> [`minha-grana/`](./minha-grana) é o painel de comissões como aplicação
+> independente: package.json, banco e deploy próprios, sem ffmpeg nem TikTok.
+> Os dois não compartilham código — o repositório é só o endereço comum. Para
+> publicá-lo, crie um projeto na Vercel apontando para este mesmo repositório e
+> defina **Root Directory = `minha-grana`**. As instruções completas estão no
+> [README dele](./minha-grana/README.md).
+
 ---
 
 ## Como funciona

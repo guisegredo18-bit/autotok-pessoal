@@ -1,0 +1,248 @@
+import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from 'node:crypto';
+import { eq } from 'drizzle-orm';
+import { db } from '@/lib/db';
+import { settings } from '@/lib/db/schema';
+import { env } from '@/lib/env';
+
+/**
+ * Chaves de integracao guardadas no banco.
+ *
+ * O motivo e pratico: configurar credenciais pelo Safari do iPhone, em telas
+ * de painel de hospedagem, e a etapa mais penosa da instalacao. Guardando as
+ * chaves no banco, elas passam a ser preenchidas numa tela do proprio
+ * aplicativo, e o deploy precisa de apenas tres variaveis: DATABASE_URL,
+ * APP_PASSWORD e AUTH_SECRET.
+ *
+ * As chaves NAO ficam em texto puro: sao cifradas com AES-256-GCM usando uma
+ * chave derivada do AUTH_SECRET. Quem conseguir ler o banco sem ter o
+ * AUTH_SECRET nao consegue usar suas credenciais.
+ */
+
+/** Campos configuraveis pelo painel. */
+export const SECRET_FIELDS = [
+  'hotmartClientId',
+  'hotmartClientSecret',
+  'hotmartBasic',
+  'amazonAccessKey',
+  'amazonSecretKey',
+  'amazonPartnerTag',
+  'amazonMarketplace',
+] as const;
+
+export type SecretField = (typeof SECRET_FIELDS)[number];
+export type SecretValues = Partial<Record<SecretField, string>>;
+
+/**
+ * De qual variavel de ambiente cada campo vem.
+ *
+ * Precisamos disso para saber quem tem prioridade. Alguns campos tem valor
+ * padrao no codigo (o marketplace), entao "esta preenchido" nao distingue
+ * "voce definiu" de "e o padrao" — e, sem essa distincao, o que voce salva no
+ * painel jamais sobrescreveria o padrao.
+ */
+export const FIELD_ENV_VAR: Record<SecretField, string> = {
+  hotmartClientId: 'HOTMART_CLIENT_ID',
+  hotmartClientSecret: 'HOTMART_CLIENT_SECRET',
+  hotmartBasic: 'HOTMART_BASIC',
+  amazonAccessKey: 'AMAZON_ACCESS_KEY',
+  amazonSecretKey: 'AMAZON_SECRET_KEY',
+  amazonPartnerTag: 'AMAZON_PARTNER_TAG',
+  amazonMarketplace: 'AMAZON_MARKETPLACE',
+};
+
+/** true quando o valor foi definido no ambiente, e nao herdado de um padrao. */
+export function definedInEnvironment(
+  field: SecretField,
+  source: Record<string, string | undefined> = process.env,
+): boolean {
+  const value = source[FIELD_ENV_VAR[field]];
+  return typeof value === 'string' && value.trim() !== '';
+}
+
+/** Campos que nunca sao devolvidos para a tela — so dizemos se estao preenchidos. */
+export const SENSITIVE_FIELDS: SecretField[] = [
+  'hotmartClientSecret',
+  'hotmartBasic',
+  'amazonSecretKey',
+];
+
+const STORE_KEY = 'secrets';
+
+function cryptoKey(): Buffer {
+  if (!env.authSecret) {
+    throw new Error(
+      'AUTH_SECRET nao configurado — sem ele nao da para guardar chaves com seguranca.',
+    );
+  }
+  // scrypt transforma o segredo (que pode ser uma frase curta) numa chave de
+  // 32 bytes propria para AES, e o custo torna forca bruta cara.
+  return scryptSync(env.authSecret, 'minha-grana-secrets-v1', 32);
+}
+
+/** Exportada para teste: cifra um valor com a chave derivada do AUTH_SECRET. */
+export function encrypt(value: string): string {
+  const iv = randomBytes(12);
+  const cipher = createCipheriv('aes-256-gcm', cryptoKey(), iv);
+  const encrypted = Buffer.concat([cipher.update(value, 'utf8'), cipher.final()]);
+  // O tag de autenticacao e o que detecta adulteracao do valor cifrado.
+  return [iv, cipher.getAuthTag(), encrypted].map((b) => b.toString('base64')).join('.');
+}
+
+/** Exportada para teste. Devolve null em vez de lancar quando nao consegue. */
+export function decrypt(payload: string): string | null {
+  try {
+    const [iv, tag, data] = payload.split('.').map((p) => Buffer.from(p, 'base64'));
+    if (!iv || !tag || !data) return null;
+
+    const decipher = createDecipheriv('aes-256-gcm', cryptoKey(), iv);
+    decipher.setAuthTag(tag);
+    return Buffer.concat([decipher.update(data), decipher.final()]).toString('utf8');
+  } catch {
+    // Acontece quando o AUTH_SECRET mudou depois das chaves terem sido salvas.
+    // Devolver null deixa a tela mostrar o campo como vazio, para ser
+    // preenchido de novo, em vez de derrubar a aplicacao inteira.
+    return null;
+  }
+}
+
+/**
+ * Quantas chaves existem no banco e quantas nao puderam ser decifradas.
+ *
+ * A distincao importa porque as duas situacoes se parecem: em ambas a chave
+ * "some". Sem esta contagem, um AUTH_SECRET trocado se disfarca de "voce
+ * esqueceu de preencher" — e a pessoa preenche tudo de novo sem entender por
+ * que sumiu.
+ */
+export type SecretsHealth = { stored: number; unreadable: number };
+
+let cache: { values: SecretValues; health: SecretsHealth; at: number } | null = null;
+const CACHE_MS = 30_000;
+
+export async function loadSecrets(force = false): Promise<SecretValues> {
+  return (await loadSecretsWithHealth(force)).values;
+}
+
+async function loadSecretsWithHealth(
+  force = false,
+): Promise<{ values: SecretValues; health: SecretsHealth }> {
+  if (!force && cache && Date.now() - cache.at < CACHE_MS) return cache;
+
+  const values: SecretValues = {};
+  const health: SecretsHealth = { stored: 0, unreadable: 0 };
+
+  try {
+    const [row] = await db.select().from(settings).where(eq(settings.key, STORE_KEY)).limit(1);
+    const stored = (row?.value ?? {}) as Record<string, string>;
+
+    for (const field of SECRET_FIELDS) {
+      const raw = stored[field];
+      if (typeof raw !== 'string' || raw.length === 0) continue;
+
+      health.stored++;
+      const plain = decrypt(raw);
+      if (plain) values[field] = plain;
+      else health.unreadable++;
+    }
+  } catch {
+    // Banco indisponivel ou tabelas ainda nao criadas: seguimos so com o
+    // ambiente, que e exatamente o estado de quem acabou de instalar.
+  }
+
+  cache = { values, health, at: Date.now() };
+  return cache;
+}
+
+/** Diagnostico para a tela de configuracoes. */
+export async function secretsHealth(): Promise<SecretsHealth> {
+  return (await loadSecretsWithHealth()).health;
+}
+
+/** Grava (ou apaga, quando o valor vem vazio) as chaves informadas. */
+export async function saveSecrets(patch: SecretValues): Promise<void> {
+  const [row] = await db.select().from(settings).where(eq(settings.key, STORE_KEY)).limit(1);
+  const stored = { ...((row?.value ?? {}) as Record<string, string>) };
+
+  for (const [field, value] of Object.entries(patch)) {
+    if (!SECRET_FIELDS.includes(field as SecretField)) continue;
+
+    if (value === undefined) continue;
+    if (value === '') {
+      delete stored[field];
+      continue;
+    }
+    stored[field] = encrypt(value);
+  }
+
+  await db
+    .insert(settings)
+    .values({ key: STORE_KEY, value: stored })
+    .onConflictDoUpdate({ target: settings.key, set: { value: stored, updatedAt: new Date() } });
+
+  cache = null;
+  hydrated = false;
+}
+
+let hydrated = false;
+
+/**
+ * Copia as chaves do banco para dentro do objeto `env`.
+ *
+ * Manter o resto do codigo lendo `env.amazonAccessKey` (em vez de espalhar
+ * chamadas assincronas por toda parte) foi deliberado: a origem do valor vira
+ * um detalhe de configuracao, nao um assunto de cada modulo.
+ *
+ * A variavel de ambiente sempre vence, para que um `.env` local continue
+ * sobrepondo o que estiver salvo no banco.
+ */
+export async function hydrateEnv(force = false): Promise<void> {
+  if (hydrated && !force) return;
+
+  const { values, health } = await loadSecretsWithHealth(force);
+
+  if (health.unreadable > 0) {
+    console.warn(
+      `[minha-grana] ${health.unreadable} de ${health.stored} chaves nao puderam ser ` +
+        'decifradas. O AUTH_SECRET mudou depois que elas foram salvas — restaure o valor ' +
+        'antigo ou preencha as chaves de novo.',
+    );
+  }
+
+  const target = env as unknown as Record<string, unknown>;
+
+  for (const field of SECRET_FIELDS) {
+    const fromDb = values[field];
+    if (!fromDb) continue;
+    // Um valor definido no ambiente vence (permite um .env local sobrepor o
+    // banco); um padrao do codigo, nao — senao o que voce salva no painel
+    // nunca teria efeito nos campos que tem padrao.
+    if (definedInEnvironment(field)) continue;
+    target[field] = fromDb;
+  }
+
+  hydrated = true;
+}
+
+/** Quais campos estao preenchidos, sem revelar os valores sensiveis. */
+export async function secretsStatus(): Promise<Record<SecretField, boolean>> {
+  await hydrateEnv();
+  const source = env as unknown as Record<string, unknown>;
+  const status = {} as Record<SecretField, boolean>;
+  for (const field of SECRET_FIELDS) {
+    status[field] = Boolean(source[field]);
+  }
+  return status;
+}
+
+/** Valores para preencher o formulario — os sensiveis voltam mascarados. */
+export async function secretsForForm(): Promise<SecretValues> {
+  await hydrateEnv();
+  const source = env as unknown as Record<string, unknown>;
+  const values: SecretValues = {};
+
+  for (const field of SECRET_FIELDS) {
+    const value = source[field];
+    if (typeof value !== 'string' || value === '') continue;
+    values[field] = SENSITIVE_FIELDS.includes(field) ? '' : value;
+  }
+  return values;
+}

@@ -19,9 +19,5 @@
     }
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
-  // `minha-grana` e uma aplicacao separada, com package.json, tsconfig e
-  // deploy proprios. Sem excluir aqui, o typecheck do AutoTok tentaria
-  // compilar os arquivos dela resolvendo `@/` para a raiz errada — e falharia
-  // em codigo que esta correto no contexto dele.
-  "exclude": ["node_modules", "minha-grana"]
+  "exclude": ["node_modules"]
 }

@@ -1,0 +1,63 @@
+name: CI (minha-grana)
+
+# O app de comissoes vive em `minha-grana/` e tem package.json proprio, entao
+# precisa do seu proprio job: o CI da raiz nao instala nem testa nada la
+# dentro. Roda so quando algo naquela pasta muda — o AutoTok e o app de
+# comissoes nao compartilham codigo, e um pull no outro nao muda nada aqui.
+on:
+  pull_request:
+    paths: ['minha-grana/**', '.github/workflows/ci-grana.yml']
+  workflow_dispatch:
+  push:
+    branches: [main, master]
+    paths: ['minha-grana/**', '.github/workflows/ci-grana.yml']
+
+concurrency:
+  group: ci-grana-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: minha-grana
+    # O build precisa que os modulos possam ser importados sem banco de dados;
+    # valores falsos aqui garantem que ninguem introduza uma conexao no topo
+    # de um modulo sem perceber.
+    env:
+      DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
+      AUTH_SECRET: ci-secret-only-for-build
+      APP_URL: http://localhost:3000
+
+    steps:
+      # Sem actions do marketplace: quando o servico que as resolve sai do ar,
+      # todo workflow que depende delas para junto.
+      - name: Baixar o codigo
+        working-directory: .
+        run: |
+          git clone --depth 1 --branch "${{ github.head_ref || github.ref_name }}" \
+            "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" .
+
+      - run: npm install --no-audit --no-fund
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Testes
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      # Se o schema mudou e ninguem gerou a migration, o proximo deploy sobe
+      # com o banco desatualizado. Melhor descobrir aqui.
+      - name: Migration em dia com o schema
+        run: |
+          npx drizzle-kit generate
+          if [ -n "$(git status --porcelain drizzle)" ]; then
+            echo "::error::O schema mudou mas a migration nao foi gerada. Rode: npx drizzle-kit generate"
+            git status --porcelain drizzle
+            exit 1
+          fi
