@@ -17,15 +17,41 @@ import { db } from './index';
 /** Uma vez pronto, o banco nao "despronta" — evita consultar a cada navegacao. */
 let knownReady = false;
 
+/**
+ * As tabelas que a aplicacao precisa para funcionar.
+ *
+ * Conferir TODAS, e nao so uma, e o que faz uma atualizacao ser detectada.
+ * Enquanto a checagem olhava apenas `settings`, um banco preparado antes de
+ * uma migration nova respondia "pronto": o botao de preparar nunca aparecia, e
+ * a tela que usava a tabela nova quebrava com uma excecao sem mensagem — que
+ * no celular chega como pagina preta com um numero.
+ *
+ * Um teste garante que esta lista acompanhe o schema; esquecer de atualiza-la
+ * e justamente o descuido que produziu aquele sintoma.
+ */
+export const REQUIRED_TABLES = [
+  'settings',
+  'trends',
+  'ideas',
+  'videos',
+  'accounts',
+  'jobs',
+  'affiliate_products',
+  'commissions',
+] as const;
+
 export async function databaseIsReady(): Promise<boolean> {
   if (knownReady) return true;
 
   try {
-    // `to_regclass` devolve null em vez de lancar quando a tabela nao existe,
-    // o que evita depender de codigo de erro do Postgres.
-    const result = await db.execute(sql`select to_regclass('public.settings') as tabela`);
-    const rows = result as unknown as { tabela: string | null }[];
-    knownReady = Boolean(rows?.[0]?.tabela);
+    const result = await db.execute(sql`
+      select count(*)::int as encontradas
+      from information_schema.tables
+      where table_schema = 'public'
+        and table_name = any(${sql.param(REQUIRED_TABLES as unknown as string[])}::text[])
+    `);
+    const rows = result as unknown as { encontradas: number }[];
+    knownReady = (rows?.[0]?.encontradas ?? 0) === REQUIRED_TABLES.length;
     return knownReady;
   } catch {
     // Banco inacessivel tambem conta como "nao pronto": a tela de preparacao
