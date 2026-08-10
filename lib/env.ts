@@ -107,6 +107,33 @@ export const env = {
 
   trendCountry: process.env.TREND_COUNTRY || 'BR',
   trendLanguage: process.env.TREND_LANGUAGE || 'pt-BR',
+
+  /**
+   * Hotmart Developers API — OAuth2 client credentials.
+   *
+   * O `hotmartBasic` e o campo "Basic" que aparece pronto no painel de
+   * credenciais da Hotmart. Ele e o base64 de `client_id:client_secret`; a
+   * aplicacao calcula esse base64 sozinha quando o campo fica vazio, mas
+   * aceitar o valor colado evita um erro chato de digitacao no celular.
+   */
+  hotmartClientId: process.env.HOTMART_CLIENT_ID ?? '',
+  hotmartClientSecret: process.env.HOTMART_CLIENT_SECRET ?? '',
+  hotmartBasic: process.env.HOTMART_BASIC ?? '',
+  /** Trocavel para apontar a sandbox — e para os testes. */
+  hotmartAuthUrl: (
+    process.env.HOTMART_AUTH_URL || 'https://api-sec-vlc.hotmart.com'
+  ).replace(/\/$/, ''),
+  hotmartApiUrl: (
+    process.env.HOTMART_API_URL || 'https://developers.hotmart.com'
+  ).replace(/\/$/, ''),
+
+  /** Amazon Product Advertising API 5.0. */
+  amazonAccessKey: process.env.AMAZON_ACCESS_KEY ?? '',
+  amazonSecretKey: process.env.AMAZON_SECRET_KEY ?? '',
+  /** Tag de afiliado (ex: seunome-20). E ela que credita a comissao. */
+  amazonPartnerTag: process.env.AMAZON_PARTNER_TAG ?? '',
+  /** Marketplace, no formato do host: www.amazon.com.br, www.amazon.com... */
+  amazonMarketplace: process.env.AMAZON_MARKETPLACE || 'www.amazon.com.br',
 };
 
 export function requireEnv<K extends keyof typeof env>(...keys: K[]): void {
@@ -156,5 +183,26 @@ export function integrationStatus() {
     tts: env.ttsProvider !== 'elevenlabs' || Boolean(env.elevenLabsApiKey),
     actions: Boolean(env.githubToken && env.githubRepo),
     push: Boolean(env.ntfyTopic),
+    hotmart: hotmartIsReady(),
+    amazon: amazonIsReady(),
   };
+}
+
+/**
+ * A Hotmart precisa das duas credenciais mais um Basic.
+ *
+ * O Basic pode ser derivado (base64 de `id:secret`), entao ele nao entra na
+ * conta: exigi-lo aqui marcaria como "faltando" uma configuracao que funciona.
+ */
+export function hotmartIsReady(): boolean {
+  return Boolean(env.hotmartClientId && env.hotmartClientSecret);
+}
+
+/**
+ * A PA-API so responde com as tres coisas juntas — e a tag de afiliado nao e
+ * opcional: sem ela a Amazon recusa a chamada, e mesmo que aceitasse os links
+ * gerados nao creditariam comissao nenhuma.
+ */
+export function amazonIsReady(): boolean {
+  return Boolean(env.amazonAccessKey && env.amazonSecretKey && env.amazonPartnerTag);
 }

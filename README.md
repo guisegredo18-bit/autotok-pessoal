@@ -13,6 +13,9 @@ crédito.
 **Instalação:** dá para fazer tudo **[pelo iPhone](#instalação-pelo-iphone-sem-computador)**,
 sem terminal — ou **[pelo computador](#instalação-pelo-computador)**, se preferir.
 
+Também acompanha suas **[comissões de afiliado](#painel-de-comissões-amazon--hotmart)**
+da Amazon e da Hotmart, em dólar, na aba **Grana**.
+
 ---
 
 ## Como funciona
@@ -419,6 +422,87 @@ Para mudar o visual das legendas (fonte, tamanho, posição), edite o bloco
 
 ---
 
+## Painel de comissões (Amazon + Hotmart)
+
+A aba **Grana** consolida, em dólar, o que as suas afiliações pagam — e serve
+para decidir o que promover em seguida.
+
+### O que entra, e de onde
+
+| Dado | Amazon | Hotmart |
+|---|---|---|
+| Catálogo de produtos | PA-API 5.0 (`SearchItems`/`GetItems`) | seus produtos, via API |
+| Preço, categoria, ranking | PA-API | API |
+| **Comissão recebida** | **CSV de ganhos** (upload) | API de vendas/comissões |
+| Percentual de comissão | não informado pela API | informado quando existe |
+
+### Duas limitações que o projeto assume em vez de disfarçar
+
+**1. A PA-API não informa quanto você ganhou.** Ela é uma API de catálogo. O
+valor real só existe no relatório do painel do Associates
+(*Relatórios → Ganhos → Download*), e por isso a comissão da Amazon entra por
+upload de CSV em **Grana → Importar**. Reenviar o mesmo período não duplica
+nada: as linhas são reconhecidas e atualizadas.
+
+Seria fácil estimar a comissão multiplicando o preço pela tabela de categorias
+— e o painel pareceria completo. Não faz, porque essa tabela muda sem aviso e o
+número nunca fecharia com o extrato, que é justamente para o que ele serve.
+
+**2. A Hotmart não publica o marketplace de afiliados em API.** Temperatura e
+ranking de produtos afiliáveis não têm endpoint oficial. Dá para trazer os
+produtos já ligados à sua conta e todas as suas vendas; a descoberta de
+produtos novos fica com a Amazon.
+
+Ainda: contas novas do Associates só recebem cota da PA-API **depois das
+primeiras vendas qualificadas**. Até lá as chamadas voltam com
+`TooManyRequests` — o painel diz isso com essas palavras, e a importação de CSV
+funciona desde o primeiro dia.
+
+### Conversão para dólar
+
+A cotação é buscada uma vez por dia (open.er-api.com, sem chave) e a conversão
+acontece **no momento da importação**, não na hora de exibir. Cada comissão
+guarda o valor original, a cotação usada e o valor em USD — é o que permite
+conferir com o extrato e refazer a conta.
+
+Quando não há cotação, o valor em dólar fica **vazio**, nunca zero: um zero
+somaria silenciosamente e faria o painel afirmar que você ganhou menos do que
+ganhou. A tela mostra quantas linhas estão nessa situação.
+
+### A projeção
+
+Média diária do período observado × 30. Só isso, e de propósito: qualquer curva
+de tendência seria simulação com cara de precisão, e o pedido era projetar a
+partir dos dados reais importados.
+
+O período observado nunca conta dias anteriores à sua primeira comissão — quem
+importou ontem veria a média dividida por 30 e concluiria que não ganha quase
+nada. Abaixo de 14 dias de histórico o painel marca a projeção como instável, e
+sem nada aprovado no último mês ele não projeta: mostra `—` em vez de afirmar
+"você vai ganhar US$ 0".
+
+### Configuração
+
+Em **Configurações → Chaves**: Client ID e Secret da Hotmart
+(developers.hotmart.com → Credenciais), e Access Key, Secret Key, tag de
+afiliado e marketplace da Amazon (afiliados.amazon.com.br → Ferramentas → API
+de Publicidade de Produtos). Como todas as chaves do projeto, ficam **cifradas
+no banco** (AES-256-GCM com chave derivada do `AUTH_SECRET`) e nunca chegam ao
+navegador.
+
+Em **Grana → Importar**, o campo *Seu papel na Hotmart* precisa estar certo:
+cada venda lista quanto cada parte ganhou (produtor, coprodutor, afiliado), e
+somar todas exibiria o faturamento do produto como se fosse o seu ganho.
+
+### Exportação
+
+**Grana → Importar → Exportar** baixa um CSV com data, produto, valor na moeda
+original, cotação usada e valor em dólar — separado por ponto-e-vírgula e com
+BOM, que é o que o Excel em português abre direto. É material de apoio para o
+contador (carnê-leão); o projeto não calcula imposto.
+
+---
+
 ## Rodando pelo terminal
 
 ```bash
@@ -468,8 +552,11 @@ Trocar para `AI_PROVIDER=anthropic` é a única mudança que gera custo
 ```
 app/                  painel PWA (Next.js App Router)
   (app)/              telas internas, já protegidas por sessão
+  (app)/comissoes/    painel de comissões (Amazon + Hotmart)
   api/tiktok/         fluxo de OAuth
+  api/comissoes/      download do CSV consolidado
   actions.ts          server actions do painel
+  actions-comissoes.ts  server actions do painel de comissões
 lib/
   trends/             coleta e pontuação das tendências
   ai/                 prompts, provedores (Gemini/Groq/OpenRouter/Ollama/Claude)
@@ -477,7 +564,11 @@ lib/
   video/              FFmpeg, legendas, render
   tts/                narração (Edge grátis ou ElevenLabs)
   tiktok/             OAuth e Content Posting API
-  pipeline/           orquestração (ideias → render → publicação)
+  hotmart/            OAuth2 client credentials + vendas e comissões
+  amazon/             PA-API 5.0 (assinatura SigV4) + leitura do CSV de ganhos
+  afiliados/          nota, somas, projeção e exportação — sem rede, sem banco
+  money.ts            centavos, cotação e conversão para USD
+  pipeline/           orquestração (ideias → render → publicação, importações)
   db/                 schema e configurações
 scripts/              entrypoints usados pelo GitHub Actions
 tests/                testes da lógica pura (rodam offline)
