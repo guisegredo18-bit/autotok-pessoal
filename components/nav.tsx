@@ -8,6 +8,7 @@ const ITEMS = [
   { href: '/tendencias', label: 'Trends', icon: '↗' },
   { href: '/ideias', label: 'Ideias', icon: '✎' },
   { href: '/fila', label: 'Fila', icon: '▶' },
+  { href: '/comissoes', label: 'Grana', icon: '$' },
   { href: '/config', label: 'Config', icon: '⚙' },
 ];
 

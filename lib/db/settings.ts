@@ -50,6 +50,18 @@ export type AppSettings = {
    * pessoa presa no motor que nao entrega maquina.
    */
   renderEngineChosen: boolean;
+  /**
+   * De qual papel sao as suas comissoes na Hotmart.
+   *
+   * A mesma venda aparece com o quanto cada parte ganhou — produtor,
+   * coprodutor, afiliado. Somar todas faria o painel exibir o faturamento do
+   * produto como se fosse o seu ganho, entao e preciso dizer qual e o seu.
+   */
+  hotmartRole: 'AFFILIATE' | 'PRODUCER' | 'COPRODUCER';
+  /** Termos usados para buscar produtos na Amazon (PA-API SearchItems). */
+  affiliateKeywords: string[];
+  /** Quantos dias para tras cada importacao da Hotmart varre. */
+  importWindowDays: number;
 };
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -65,6 +77,9 @@ export const DEFAULT_SETTINGS: AppSettings = {
   blockedWords: [],
   renderEngine: DEFAULT_RENDER_ENGINE,
   renderEngineChosen: false,
+  hotmartRole: 'AFFILIATE',
+  affiliateKeywords: [],
+  importWindowDays: 90,
 };
 
 const KEY = 'app';

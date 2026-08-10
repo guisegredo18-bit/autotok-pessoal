@@ -107,6 +107,56 @@ const GROUPS: Group[] = [
     ],
   },
   {
+    title: 'Hotmart',
+    description:
+      'Credenciais de developers.hotmart.com > Credenciais. Sao elas que trazem suas ' +
+      'vendas e comissoes para o painel de Grana.',
+    fields: [
+      { name: 'hotmartClientId', label: 'Client ID' },
+      { name: 'hotmartClientSecret', label: 'Client Secret', secret: true },
+      {
+        name: 'hotmartBasic',
+        label: 'Basic (opcional)',
+        hint: 'Se deixar vazio, a aplicacao calcula a partir dos dois campos acima.',
+        secret: true,
+      },
+    ],
+  },
+  {
+    title: 'Amazon Associates',
+    description:
+      'Chaves da Product Advertising API, em afiliados.amazon.com.br > Ferramentas > ' +
+      'API de Publicidade de Produtos. Contas novas so recebem cota depois das primeiras vendas.',
+    fields: [
+      { name: 'amazonAccessKey', label: 'Access Key' },
+      { name: 'amazonSecretKey', label: 'Secret Key', secret: true },
+      {
+        name: 'amazonPartnerTag',
+        label: 'Tag de afiliado',
+        placeholder: 'seunome-20',
+        hint: 'E ela que credita a comissao nos links gerados.',
+      },
+      {
+        name: 'amazonMarketplace',
+        label: 'Marketplace',
+        options: [
+          { value: 'www.amazon.com.br', label: 'Brasil (amazon.com.br)' },
+          { value: 'www.amazon.com', label: 'Estados Unidos (amazon.com)' },
+          { value: 'www.amazon.es', label: 'Espanha (amazon.es)' },
+          { value: 'www.amazon.com.mx', label: 'Mexico (amazon.com.mx)' },
+          { value: 'www.amazon.co.uk', label: 'Reino Unido (amazon.co.uk)' },
+          { value: 'www.amazon.de', label: 'Alemanha (amazon.de)' },
+          { value: 'www.amazon.fr', label: 'Franca (amazon.fr)' },
+          { value: 'www.amazon.it', label: 'Italia (amazon.it)' },
+          { value: 'www.amazon.ca', label: 'Canada (amazon.ca)' },
+          { value: 'www.amazon.co.jp', label: 'Japao (amazon.co.jp)' },
+          { value: 'www.amazon.com.au', label: 'Australia (amazon.com.au)' },
+          { value: 'www.amazon.in', label: 'India (amazon.in)' },
+        ],
+      },
+    ],
+  },
+  {
     title: 'Notificacao no celular',
     description: 'Instale o app ntfy e assine um topico com nome longo e aleatorio.',
     fields: [{ name: 'ntfyTopic', label: 'Topico do ntfy', placeholder: 'autotok-k3n8vqz1x' }],
