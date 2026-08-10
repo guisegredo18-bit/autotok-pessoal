@@ -87,6 +87,31 @@ funciona desde o primeiro dia.
 > Guarde o `AUTH_SECRET`. Se ele mudar, as credenciais que você registrar
 > precisam ser preenchidas de novo — é ele que as decifra.
 
+#### Reaproveitando o banco de outro aplicativo
+
+Dá para colar a **mesma `DATABASE_URL`** que outro app seu já usa (o AutoTok,
+por exemplo) em vez de criar um banco novo. Funciona, e três medidas tornam
+isso seguro:
+
+- **As chaves na tabela `settings` são prefixadas** (`grana_app`,
+  `grana_secrets`, `grana_fx`). Sem isso os dois apps escreveriam nas mesmas
+  linhas: salvar uma preferência aqui apagaria as do vizinho, e registrar uma
+  credencial tornaria as dele ilegíveis — cada app cifra com um sal diferente.
+  Nada disso daria erro; daria perda de dados descoberta dias depois.
+- **A migration usa `CREATE TABLE IF NOT EXISTS`**, porque as tabelas podem já
+  ter sido criadas pelo outro app.
+- **O controle de migrations aplicadas fica numa tabela própria**
+  (`__drizzle_migrations_grana`). A tabela padrão guarda só a data da última
+  migration aplicada e pula tudo mais antigo que ela — compartilhada, a
+  migration de um app poderia ser marcada como aplicada sem nunca ter rodado.
+
+O que os dois passam a compartilhar de verdade são as tabelas
+`affiliate_products` e `commissions`. Como o painel de comissões sai do
+AutoTok, na prática só este app as usa.
+
+O custo de dividir: apagar o projeto no Neon derruba os dois. Se preferir
+independência total, crie um banco novo — o resto da instalação é idêntico.
+
 ### Etapa 3 — preparar e instalar (~2 min)
 
 1. Abra a URL que a Vercel deu e entre com a `APP_PASSWORD`.

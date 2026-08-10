@@ -66,7 +66,17 @@ export const SENSITIVE_FIELDS: SecretField[] = [
   'amazonSecretKey',
 ];
 
-const STORE_KEY = 'secrets';
+/**
+ * Prefixo proprio na tabela `settings`.
+ *
+ * Este aplicativo pode dividir o banco com outro (e no caso do AutoTok, que
+ * tambem guarda credenciais em `settings`, divide mesmo). Sem o prefixo os
+ * dois escreveriam na mesma linha: como cada um deriva a chave de cifragem com
+ * um sal diferente, o segundo a salvar tornaria as credenciais do primeiro
+ * ilegiveis — e o sintoma seria "minhas chaves sumiram", sem nada apontando
+ * para o vizinho.
+ */
+export const STORE_KEY = 'grana_secrets';
 
 function cryptoKey(): Buffer {
   if (!env.authSecret) {

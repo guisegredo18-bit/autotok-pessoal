@@ -24,10 +24,19 @@ export const DEFAULT_SETTINGS: AppSettings = {
   importWindowDays: 90,
 };
 
-const KEY = 'app';
+/**
+ * Prefixo proprio: o banco pode ser dividido com outro aplicativo.
+ *
+ * A chave generica `app` e a que o AutoTok usa para as preferencias dele
+ * (nicho, template, motor de render). Gravar aqui com o mesmo nome apagaria
+ * todas elas na primeira vez que voce salvasse uma preferencia deste app — sem
+ * erro, sem aviso, e so descoberto quando o outro painel parasse de gerar
+ * video no formato certo.
+ */
+export const SETTINGS_KEY = 'grana_app';
 
 export async function getSettings(): Promise<AppSettings> {
-  const [row] = await db.select().from(settings).where(eq(settings.key, KEY)).limit(1);
+  const [row] = await db.select().from(settings).where(eq(settings.key, SETTINGS_KEY)).limit(1);
   if (!row) return { ...DEFAULT_SETTINGS };
   return applyStored(row.value as Partial<AppSettings>);
 }
@@ -52,7 +61,7 @@ export async function saveSettings(patch: Partial<AppSettings>): Promise<AppSett
   const next = { ...current, ...patch };
   await db
     .insert(settings)
-    .values({ key: KEY, value: next })
+    .values({ key: SETTINGS_KEY, value: next })
     .onConflictDoUpdate({ target: settings.key, set: { value: next, updatedAt: new Date() } });
   return next;
 }

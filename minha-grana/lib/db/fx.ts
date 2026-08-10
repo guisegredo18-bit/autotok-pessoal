@@ -13,11 +13,12 @@ import { fetchRates, isStale, type FxQuote, type Rates } from '@/lib/money';
  * um monte de comissao sem valor em dolar.
  */
 
-const KEY = 'fx';
+/** Prefixo proprio, pelo mesmo motivo das outras chaves (veja lib/secrets.ts). */
+export const FX_KEY = 'grana_fx';
 
 export async function getStoredQuote(): Promise<FxQuote | null> {
   try {
-    const [row] = await db.select().from(settings).where(eq(settings.key, KEY)).limit(1);
+    const [row] = await db.select().from(settings).where(eq(settings.key, FX_KEY)).limit(1);
     const value = row?.value as FxQuote | undefined;
     if (!value?.rates || typeof value.fetchedAt !== 'string') return null;
     return value;
@@ -44,7 +45,7 @@ export async function currentRates(): Promise<{ rates: Rates; fetchedAt: string 
   try {
     await db
       .insert(settings)
-      .values({ key: KEY, value: quote })
+      .values({ key: FX_KEY, value: quote })
       .onConflictDoUpdate({
         target: settings.key,
         set: { value: quote, updatedAt: new Date() },

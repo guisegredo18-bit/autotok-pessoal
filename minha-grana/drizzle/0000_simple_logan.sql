@@ -1,4 +1,4 @@
-CREATE TABLE "affiliate_products" (
+CREATE TABLE IF NOT EXISTS "affiliate_products" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"source" text NOT NULL,
 	"external_id" text NOT NULL,
@@ -24,7 +24,7 @@ CREATE TABLE "affiliate_products" (
 	CONSTRAINT "affiliate_products_unique" UNIQUE("source","external_id")
 );
 --> statement-breakpoint
-CREATE TABLE "commissions" (
+CREATE TABLE IF NOT EXISTS "commissions" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"source" text NOT NULL,
 	"external_id" text NOT NULL,
@@ -43,13 +43,13 @@ CREATE TABLE "commissions" (
 	CONSTRAINT "commissions_unique" UNIQUE("source","external_id")
 );
 --> statement-breakpoint
-CREATE TABLE "settings" (
+CREATE TABLE IF NOT EXISTS "settings" (
 	"key" text PRIMARY KEY NOT NULL,
 	"value" jsonb NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE INDEX "affiliate_products_score_idx" ON "affiliate_products" USING btree ("score");--> statement-breakpoint
-CREATE INDEX "affiliate_products_operating_idx" ON "affiliate_products" USING btree ("operating");--> statement-breakpoint
-CREATE INDEX "commissions_occurred_idx" ON "commissions" USING btree ("occurred_at");--> statement-breakpoint
-CREATE INDEX "commissions_source_idx" ON "commissions" USING btree ("source");
+CREATE INDEX IF NOT EXISTS "affiliate_products_score_idx" ON "affiliate_products" USING btree ("score");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "affiliate_products_operating_idx" ON "affiliate_products" USING btree ("operating");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "commissions_occurred_idx" ON "commissions" USING btree ("occurred_at");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "commissions_source_idx" ON "commissions" USING btree ("source");

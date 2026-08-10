@@ -12,7 +12,26 @@ import { db } from './index';
  * As migrations sao as mesmas da pasta `drizzle/`, geradas pelo drizzle-kit e
  * versionadas no repositorio — nao ha SQL escrito a mao aqui que possa
  * divergir do schema.
+ *
+ * Este aplicativo pode dividir o banco com outro. Duas medidas tornam isso
+ * seguro, e as duas sao invisiveis quando o banco e exclusivo:
+ *
+ * 1. O controle de migrations aplicadas vive numa tabela propria. A tabela
+ *    padrao guarda apenas a data da ultima migration aplicada, e o migrator
+ *    pula tudo que for mais antigo que ela — dividida entre dois aplicativos,
+ *    a migration de um poderia ser marcada como aplicada sem nunca ter
+ *    rodado, so por ter sido gerada antes da do vizinho.
+ *
+ * 2. Os `CREATE TABLE` da migration usam `IF NOT EXISTS`, porque as tabelas
+ *    podem ja ter sido criadas pelo outro aplicativo.
  */
+
+/**
+ * Tabela propria de controle. O nome nao pode mudar depois que alguem rodou a
+ * preparacao: com outro nome, o migrator nao encontra o registro e tenta
+ * aplicar tudo de novo.
+ */
+const MIGRATIONS_TABLE = '__drizzle_migrations_grana';
 
 /** Uma vez pronto, o banco nao "despronta" — evita consultar a cada navegacao. */
 let knownReady = false;
@@ -23,7 +42,12 @@ export async function databaseIsReady(): Promise<boolean> {
   try {
     // `to_regclass` devolve null em vez de lancar quando a tabela nao existe,
     // o que evita depender de codigo de erro do Postgres.
-    const result = await db.execute(sql`select to_regclass('public.settings') as tabela`);
+    //
+    // A tabela conferida e `commissions`, e nao `settings`: num banco dividido
+    // com outro aplicativo, `settings` ja existe antes de este app ter rodado
+    // qualquer migration — e o painel abriria consultando tabelas
+    // inexistentes, que e exatamente o que esta checagem evita.
+    const result = await db.execute(sql`select to_regclass('public.commissions') as tabela`);
     const rows = result as unknown as { tabela: string | null }[];
     knownReady = Boolean(rows?.[0]?.tabela);
     return knownReady;
@@ -43,6 +67,7 @@ export async function prepareDatabase(): Promise<SetupResult> {
   try {
     await migrate(db as never, {
       migrationsFolder: path.join(process.cwd(), 'drizzle'),
+      migrationsTable: MIGRATIONS_TABLE,
     });
     knownReady = true;
     return { ok: true, message: 'Banco preparado. As tabelas foram criadas.' };
