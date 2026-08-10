@@ -14,6 +14,7 @@ import {
   refreshOperatingProducts,
   setOperating,
 } from '@/lib/pipeline/comissoes';
+import { generateIdeaForProduct } from '@/lib/pipeline/produto-video';
 import type { ImportResult } from '@/lib/afiliados/types';
 import type { ActionState } from '@/app/actions';
 
@@ -173,6 +174,34 @@ export async function toggleOperatingAction(
       message: operating
         ? 'Produto marcado como em operacao.'
         : 'Produto saiu da lista de operacao.',
+    };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+// --- Video do produto -------------------------------------------------------
+
+/**
+ * Transforma um produto num video.
+ *
+ * A ideia entra em "aguardando voce" na tela Ideias, e nao vira video sozinha:
+ * o roteiro fala de um produto real com o seu link embaixo, entao ler antes de
+ * gravar e o passo que evita publicar besteira em nome proprio.
+ */
+export async function gerarVideoDoProdutoAction(productId: string): Promise<ActionState> {
+  try {
+    await guard();
+    const { title, warnings } = await generateIdeaForProduct(productId);
+
+    revalidatePath('/comissoes');
+    revalidatePath('/ideias');
+
+    return {
+      ok: true,
+      message:
+        `Roteiro "${title}" criado. Abra a aba Ideias para ler e aprovar.` +
+        (warnings.length > 0 ? ` ${warnings.join(' ')}` : ''),
     };
   } catch (err) {
     return fail(err);

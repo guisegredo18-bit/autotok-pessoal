@@ -1,6 +1,13 @@
 import { z } from 'zod';
 import type { AppSettings } from '@/lib/db/settings';
-import { COMMON_RULES, TEMPLATES, contextBlock, type TemplateName } from './templates';
+import {
+  COMMON_RULES,
+  TEMPLATES,
+  contextBlock,
+  productBlock,
+  type ProductContext,
+  type TemplateName,
+} from './templates';
 import { getProvider } from './providers';
 import { InvalidJsonError, parseJson } from './json';
 
@@ -82,6 +89,8 @@ export type GenerateOptions = {
   count: number;
   trendName?: string;
   trendKind?: string;
+  /** Quando presente, o roteiro fala deste produto — e nao de um assunto. */
+  product?: ProductContext;
 };
 
 /** Gera N ideias de video completas para uma tendencia. */
@@ -92,6 +101,7 @@ export async function generateIdeas(opts: GenerateOptions): Promise<GeneratedIde
 
   const prompt = `
 ${contextBlock(opts.settings, opts.trendName, opts.trendKind)}
+${opts.product ? productBlock(opts.product) : ''}
 
 ${template.structure}
 
