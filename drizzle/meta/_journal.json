@@ -22,6 +22,13 @@
       "when": 1786452724547,
       "tag": "0002_loving_goblin_queen",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1786463868380,
+      "tag": "0003_lovely_red_hulk",
+      "breakpoints": true
     }
   ]
 }

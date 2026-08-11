@@ -254,9 +254,25 @@ export default async function QueuePage() {
                 </p>
               )}
 
+              {/* Video pronto com aviso nao e video quebrado: pintar os dois de
+                  vermelho faz o aviso que pede acao se perder no meio do que
+                  so informa. */}
               {video.error && (
-                <p className="mt-2 rounded-lg bg-red-950/40 p-2.5 text-[12px] leading-snug text-red-300">
+                <p
+                  className={`mt-2 rounded-lg p-2.5 text-[12px] leading-snug ${
+                    video.status === 'ready'
+                      ? 'bg-amber-950/40 text-amber-200'
+                      : 'bg-red-950/40 text-red-300'
+                  }`}
+                >
                   {video.error}
+                </p>
+              )}
+
+              {video.needsReview && video.status === 'ready' && (
+                <p className="mt-2 text-[12px] leading-snug text-muted">
+                  O piloto automatico nao publica este video sozinho — assista e
+                  decida voce.
                 </p>
               )}
 

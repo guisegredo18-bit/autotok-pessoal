@@ -104,6 +104,15 @@ export const videos = pgTable(
     caption: text('caption').notNull().default(''),
     hashtags: jsonb('hashtags').$type<string[]>().notNull().default([]),
     privacyLevel: text('privacy_level').notNull().default('SELF_ONLY'),
+    /**
+     * Video que saiu bom o bastante para existir, mas nao para ir ao ar sozinho.
+     *
+     * Hoje quem liga isto e a renderizacao sem narracao: um video mudo da para
+     * assistir e julgar, e por isso vale entrega-lo — mas publicar um video sem
+     * voz no seu perfil, sem ninguem ter visto, e outra coisa. O piloto pula
+     * estes; voce continua podendo publicar com um toque.
+     */
+    needsReview: boolean('needs_review').notNull().default(false),
     /** Identificadores devolvidos pela Content Posting API. */
     tiktokPublishId: text('tiktok_publish_id'),
     tiktokPostUrl: text('tiktok_post_url'),

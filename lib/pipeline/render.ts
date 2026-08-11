@@ -5,7 +5,7 @@ import { getSettings } from '@/lib/db/settings';
 import { buildCaption } from '@/lib/ai/script';
 import { voiceForMarket } from '@/lib/ai/mercado';
 import { autoPublishReady } from '@/lib/pipeline/autopilot';
-import { renderVideo } from '@/lib/video/render';
+import { SEM_NARRACAO, renderVideo } from '@/lib/video/render';
 import { putFile } from '@/lib/storage';
 import { push } from '@/lib/notify';
 import { withJob } from '@/lib/db/jobs';
@@ -79,9 +79,14 @@ async function renderInner(videoId: string, log: (message: string) => void): Pro
       putFile(`thumbs/${videoId}-${stamp}.jpg`, result.thumbnail, 'image/jpeg'),
     ]);
 
+    // Video mudo existe para ser assistido e julgado, nao para ir sozinho ao
+    // seu perfil. O piloto respeita esta marca.
+    const semVoz = result.warnings.some((w) => w.startsWith(SEM_NARRACAO));
+
     await db
       .update(videos)
       .set({
+        needsReview: semVoz,
         status: 'ready',
         videoUrl: stored.url,
         videoKey: stored.key,
@@ -96,13 +101,21 @@ async function renderInner(videoId: string, log: (message: string) => void): Pro
 
     await db.update(ideas).set({ status: 'rendered' }).where(eq(ideas.id, idea.id));
 
+    const publicaSozinho = settings.autoPublish && !semVoz;
+
     await push({
-      title: settings.autoPublish ? 'Video pronto — indo para o TikTok' : 'Video pronto para aprovacao',
-      message: settings.autoPublish
-        ? `${idea.hook}\n\n${Math.round(result.durationSeconds)}s — o piloto automatico publica sozinho. Abra a Fila se quiser barrar antes.`
-        : `${idea.hook}\n\n${Math.round(result.durationSeconds)}s — abra o painel para assistir e aprovar.`,
+      title: semVoz
+        ? 'Video pronto, mas sem voz'
+        : publicaSozinho
+          ? 'Video pronto — indo para o TikTok'
+          : 'Video pronto para aprovacao',
+      message: semVoz
+        ? `${idea.hook}\n\n${Math.round(result.durationSeconds)}s legendados, sem narracao — a narracao falhou. O piloto nao vai publicar este; assista e decida.`
+        : publicaSozinho
+          ? `${idea.hook}\n\n${Math.round(result.durationSeconds)}s — o piloto automatico publica sozinho. Abra a Fila se quiser barrar antes.`
+          : `${idea.hook}\n\n${Math.round(result.durationSeconds)}s — abra o painel para assistir e aprovar.`,
       url: `${env.appUrl}/fila`,
-      tags: ['clapper'],
+      tags: semVoz ? ['mute'] : ['clapper'],
     });
 
     /**

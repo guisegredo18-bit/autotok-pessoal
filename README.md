@@ -602,6 +602,17 @@ vieram) — é essa informação que permite corrigir o coletor.
 **Vídeo saiu com fundo liso** — falta `PEXELS_API_KEY`, ou o termo de busca da
 cena não encontrou nada. O aviso aparece no card do vídeo.
 
+**Vídeo saiu sem narração** — o Edge TTS e a voz do Google são endpoints não
+oficiais, e os dois recusam conexão de IP de servidor com alguma frequência. O
+render não morre mais por causa disso: entrega o vídeo legendado e mudo, com a
+duração que o roteiro pediu, e avisa no card. **O piloto automático não publica
+esse vídeo sozinho** — você assiste e decide.
+
+Para ter voz de volta: preencha `ELEVENLABS_API_KEY` e `ELEVENLABS_VOICE_ID` em
+Configurações → Chaves (é pago por caractere, mas funciona de qualquer IP), ou
+renderize fora da Vercel — Colab e GitHub Actions saem por IPs que costumam ser
+aceitos.
+
 **"ffmpeg não encontrado"** — o processo que renderiza não tem ffmpeg. Rodando
 local, instale-o. Se aparecer com **Onde renderizar: aqui mesmo**, é porque o
 painel está na Vercel, que não tem ffmpeg — essa opção só serve para o painel

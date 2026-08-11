@@ -1,4 +1,4 @@
-import { desc, eq, sql } from 'drizzle-orm';
+import { and, desc, eq, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { videos } from '@/lib/db/schema';
 import { getSettings, type AppSettings } from '@/lib/db/settings';
@@ -241,15 +241,35 @@ export async function autoPublishReady(
     };
   }
 
+  /**
+   * `needsReview` fica de fora.
+   *
+   * E o video que saiu bom o bastante para existir e nao para ir sozinho ao
+   * seu perfil — hoje, o que perdeu a narracao. Entregar um video mudo para
+   * voce assistir e util; publica-lo sem ninguem ter visto e o oposto do que
+   * as travas do piloto existem para evitar.
+   */
   const prontos = await db
     .select({ id: videos.id })
     .from(videos)
-    .where(eq(videos.status, 'ready'))
+    .where(and(eq(videos.status, 'ready'), eq(videos.needsReview, false)))
     .orderBy(sql`${videos.renderedAt} asc nulls last`)
     .limit(budget);
 
   if (prontos.length === 0) {
-    return { published: [], failed: [], reason: 'nenhum video pronto esperando' };
+    const [revisar] = await db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(videos)
+      .where(and(eq(videos.status, 'ready'), eq(videos.needsReview, true)));
+
+    return {
+      published: [],
+      failed: [],
+      reason:
+        (revisar?.n ?? 0) > 0
+          ? `${revisar.n} video(s) esperando voce — sairam sem narracao e o piloto nao publica esses`
+          : 'nenhum video pronto esperando',
+    };
   }
 
   const published: string[] = [];
