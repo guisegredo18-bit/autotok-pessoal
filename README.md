@@ -444,6 +444,25 @@ Ligado, o piloto aparece na tela inicial em destaque. Isso é de propósito: que
 não vê na tela que o canal está publicando sozinho descobre pelo TikTok, que é o
 pior lugar para descobrir.
 
+### Quando o piloto roda e não entrega nada
+
+Esse é o modo de falha que custa caro, porque não parece falha: os jobs ficam
+verdes, nenhum erro aparece, e mesmo assim o canal não anda. Três causas
+respondem por quase tudo — app sem auditoria mandando todo vídeo como privado,
+nota alta demais descartando todo roteiro, conta do TikTok nunca conectada.
+
+O painel não espera você desconfiar:
+
+- **Na tela inicial**, o cartão do piloto lista o que está travando e o que
+  fazer a respeito. Em amarelo quando nada do que ele produzir será visto.
+- **Em Últimas execuções**, cada rodada do piloto aparece com o que fez —
+  quantos vídeos gravou, quantos publicou, e por que parou.
+- **No celular**, uma notificação quando a rodada não entregou nada e há algo a
+  fazer. Ela não se repete enquanto o motivo for o mesmo: o cron roda três vezes
+  ao dia, e três avisos iguais por dia ensinam a ignorar avisos.
+
+Teto diário atingido **não** gera aviso nenhum — isso é o piloto funcionando.
+
 ### E o dinheiro?
 
 O piloto resolve produção e frequência, que é o que trava a maioria dos canais.
@@ -545,7 +564,7 @@ lib/
   tts/                narração (Edge grátis ou ElevenLabs)
   tiktok/             OAuth e Content Posting API
   pipeline/           orquestração (ideias → render → publicação)
-                      e o piloto automático (autopilot.ts, queue.ts)
+                      e o piloto automático (autopilot.ts, queue.ts, round.ts)
   db/                 schema e configurações
 scripts/              entrypoints usados pelo GitHub Actions
 tests/                testes da lógica pura (rodam offline)

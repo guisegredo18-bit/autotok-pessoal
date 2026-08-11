@@ -11,7 +11,7 @@ import { jobs } from './schema';
  * responde isso dentro do proprio painel.
  */
 
-export type JobType = 'scan' | 'ideas' | 'render' | 'publish';
+export type JobType = 'scan' | 'ideas' | 'render' | 'publish' | 'auto';
 
 export type JobHandle = {
   id: string;

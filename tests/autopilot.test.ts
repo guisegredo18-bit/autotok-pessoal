@@ -1,10 +1,12 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  autopilotBlockers,
   budgetLeft,
   describeAutopilot,
   pickIdeas,
   waitMinutes,
+  type AutopilotState,
 } from '@/lib/pipeline/autopilot';
 import { DEFAULT_SETTINGS, applyStored } from '@/lib/db/settings';
 
@@ -116,5 +118,100 @@ describe('padrao do piloto', () => {
   test('so gravar sozinho nao promete publicar', () => {
     const texto = describeAutopilot(applyStored({ autoApprove: true }));
     assert.doesNotMatch(texto, /publica/);
+  });
+});
+
+describe('autopilotBlockers', () => {
+  const agora = new Date('2026-08-11T12:00:00Z');
+
+  /** Um piloto ligado e saudavel: nada deve ser acusado neste estado. */
+  function saudavel(patch: Partial<AutopilotState> = {}): AutopilotState {
+    return {
+      settings: applyStored({ autoApprove: true, autoPublish: true }),
+      connected: true,
+      canPostPublic: true,
+      pendingIdeas: 4,
+      pendingAboveScore: 2,
+      lastPublishedAt: new Date('2026-08-11T09:00:00Z'),
+      now: agora,
+      ...patch,
+    };
+  }
+
+  test('piloto saudavel nao inventa problema', () => {
+    assert.deepEqual(autopilotBlockers(saudavel()), []);
+  });
+
+  test('piloto desligado nao gera aviso nenhum', () => {
+    // Quem aprova na mao ja esta olhando a tela — nao precisa ser avisado do
+    // que ele mesmo esta fazendo.
+    const desligado = saudavel({
+      settings: DEFAULT_SETTINGS,
+      connected: false,
+      canPostPublic: false,
+      pendingAboveScore: 0,
+    });
+    assert.deepEqual(autopilotBlockers(desligado), []);
+  });
+
+  test('sem auditoria do TikTok, avisa que ninguem vai ver', () => {
+    // Este e o fracasso caro: os jobs ficam verdes, os videos saem, e o canal
+    // nao cresce um seguidor porque tudo chegou privado.
+    const [aviso] = autopilotBlockers(saudavel({ canPostPublic: false }));
+    assert.equal(aviso.severity, 'alta');
+    assert.match(aviso.label, /privado/i);
+    assert.match(aviso.hint, /auditoria/i);
+  });
+
+  test('sem conta conectada, avisa antes de qualquer outra coisa', () => {
+    const avisos = autopilotBlockers(saudavel({ connected: false, canPostPublic: false }));
+    assert.equal(avisos[0].severity, 'alta');
+    assert.match(avisos[0].label, /conta do TikTok/i);
+    // Nao acusamos "vai sair privado" de quem nem conta tem: seriam dois
+    // avisos para um problema so, e o segundo esconderia o primeiro.
+    assert.equal(avisos.length, 1);
+  });
+
+  test('nota alta demais aparece com o numero que a explica', () => {
+    const [aviso] = autopilotBlockers(
+      saudavel({
+        settings: applyStored({ autoApprove: true, autoMinScore: 95 }),
+        pendingIdeas: 7,
+        pendingAboveScore: 0,
+      }),
+    );
+    assert.match(aviso.label, /7 ideia/);
+    assert.match(aviso.label, /95/);
+  });
+
+  test('fila de ideias vazia nao e problema', () => {
+    // Zero ideias esperando e o estado normal logo depois de uma rodada que
+    // gravou todas. Acusar isso seria alarme em dia de funcionamento.
+    assert.deepEqual(autopilotBlockers(saudavel({ pendingIdeas: 0, pendingAboveScore: 0 })), []);
+  });
+
+  test('silencio longo vira aviso', () => {
+    const [aviso] = autopilotBlockers(
+      saudavel({ lastPublishedAt: new Date('2026-08-08T12:00:00Z') }),
+    );
+    assert.match(aviso.label, /nao publica ha 3 dia/);
+  });
+
+  test('quem nunca publicou nao e acusado de ter parado', () => {
+    // Sem data nao da para distinguir "parou" de "ligou agora", e um alarme no
+    // primeiro dia ensina a ignorar o alarme.
+    assert.deepEqual(autopilotBlockers(saudavel({ lastPublishedAt: null })), []);
+  });
+
+  test('problema grave vem antes do menos grave', () => {
+    const avisos = autopilotBlockers(
+      saudavel({
+        canPostPublic: false,
+        pendingIdeas: 3,
+        pendingAboveScore: 0,
+      }),
+    );
+    assert.equal(avisos[0].severity, 'alta');
+    assert.equal(avisos[1].severity, 'media');
   });
 });

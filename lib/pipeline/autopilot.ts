@@ -83,6 +83,98 @@ export function describeAutopilot(settings: AppSettings): string {
   return `${partes.join(' e ')} — ate ${settings.videosPerDay}/dia`;
 }
 
+// --- O que impede o piloto de entregar --------------------------------------
+
+export type Blocker = {
+  /** O que esta atrapalhando, em uma linha. */
+  label: string;
+  /** O que fazer a respeito. */
+  hint: string;
+  /** `alta`: nada do que o piloto produzir sera visto por ninguem. */
+  severity: 'alta' | 'media';
+};
+
+export type AutopilotState = {
+  settings: AppSettings;
+  /** Se existe conta do TikTok conectada. */
+  connected: boolean;
+  /** Se o TikTok ja ofereceu privacidade publica na ultima publicacao. */
+  canPostPublic: boolean;
+  /** Ideias esperando, e quantas delas alcancam a nota do piloto. */
+  pendingIdeas: number;
+  pendingAboveScore: number;
+  lastPublishedAt: Date | null;
+  now?: Date;
+};
+
+/** Depois disso, um piloto ligado que nao publica esta parado, nao devagar. */
+const SILENT_HOURS = 48;
+
+/**
+ * O que esta entre o piloto e um video que alguem ve.
+ *
+ * Existe porque o piloto tem um modo de falhar silencioso e caro: ele roda,
+ * nao da erro nenhum, e mesmo assim nada chega a lugar nenhum — o app sem
+ * auditoria manda tudo como privado, a nota alta demais descarta todo roteiro,
+ * a conta nunca foi conectada. Nos tres casos os jobs ficam verdes e o canal
+ * fica parado, e voce so descobre semanas depois, olhando o perfil.
+ *
+ * Piloto desligado nao gera aviso nenhum: quem aprova na mao ja esta olhando.
+ */
+export function autopilotBlockers(state: AutopilotState): Blocker[] {
+  const { settings } = state;
+  if (!settings.autoApprove && !settings.autoPublish) return [];
+
+  const blockers: Blocker[] = [];
+
+  if (settings.autoPublish && !state.connected) {
+    blockers.push({
+      severity: 'alta',
+      label: 'Nenhuma conta do TikTok conectada',
+      hint: 'O piloto grava os videos mas nao tem para onde publica-los. Conecte em Configuracoes.',
+    });
+  }
+
+  if (settings.autoPublish && state.connected && !state.canPostPublic) {
+    blockers.push({
+      severity: 'alta',
+      label: 'Os videos vao ao ar como privados',
+      hint:
+        'Enquanto o app nao passa na auditoria do TikTok, o video chega na sua conta mas so ' +
+        'voce o ve — sem alcance e sem visualizacao. A auditoria e gratuita, no portal de ' +
+        'desenvolvedores. Se voce ja enviou, este aviso some depois da proxima publicacao.',
+    });
+  }
+
+  if (settings.autoApprove && state.pendingIdeas > 0 && state.pendingAboveScore === 0) {
+    blockers.push({
+      severity: 'media',
+      label: `${state.pendingIdeas} ideia(s) esperando, nenhuma alcanca a nota ${settings.autoMinScore}`,
+      hint: 'Baixe a nota do piloto ou gere ideias sobre outro assunto.',
+    });
+  }
+
+  // So acusamos silencio de quem ja publicou alguma vez: sem essa data nao da
+  // para distinguir "parou" de "ligou agora", e um alarme no primeiro dia
+  // ensina a ignorar o alarme.
+  if (settings.autoPublish && state.lastPublishedAt) {
+    const horas = (now(state).getTime() - state.lastPublishedAt.getTime()) / 3_600_000;
+    if (horas >= SILENT_HOURS) {
+      blockers.push({
+        severity: 'media',
+        label: `O piloto nao publica ha ${Math.floor(horas / 24)} dia(s)`,
+        hint: 'Veja as ultimas execucoes: o passo que falhou esta la com o motivo.',
+      });
+    }
+  }
+
+  return blockers;
+}
+
+function now(state: AutopilotState): Date {
+  return state.now ?? new Date();
+}
+
 // --- Publicacao automatica --------------------------------------------------
 
 export type AutoPublishResult = {

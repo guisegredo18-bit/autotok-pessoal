@@ -3,7 +3,7 @@ import { sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { ideas, jobs, trends, videos } from '@/lib/db/schema';
 import { getSettings } from '@/lib/db/settings';
-import { describeAutopilot } from '@/lib/pipeline/autopilot';
+import { autopilotBlockers, describeAutopilot } from '@/lib/pipeline/autopilot';
 import { integrationStatus } from '@/lib/env';
 import { getAccount } from '@/lib/tiktok/account';
 import { ActionButton } from '@/components/action-button';
@@ -43,6 +43,25 @@ export default async function Dashboard() {
     db.select().from(jobs).orderBy(sql`${jobs.startedAt} desc`).limit(5),
   ]);
 
+  const [ideasAboveScore, lastPublished] = await Promise.all([
+    count(ideas, sql`${ideas.status} = 'pending' and ${ideas.score} >= ${settings.autoMinScore}`),
+    db
+      .select({ at: videos.publishedAt })
+      .from(videos)
+      .where(sql`${videos.status} = 'published'`)
+      .orderBy(sql`${videos.publishedAt} desc`)
+      .limit(1),
+  ]);
+
+  const blockers = autopilotBlockers({
+    settings,
+    connected: Boolean(account),
+    canPostPublic: account?.canPostPublic ?? false,
+    pendingIdeas: stats.pendingIdeas,
+    pendingAboveScore: ideasAboveScore,
+    lastPublishedAt: lastPublished[0]?.at ?? null,
+  });
+
   const status = integrationStatus();
   const missing = Object.entries(status)
     .filter(([, ok]) => !ok)
@@ -59,15 +78,43 @@ export default async function Dashboard() {
           Quem não sabe disso ao olhar a tela inicial descobre pelo TikTok, que
           é o pior lugar para descobrir. Desligado, não ocupa espaço. */}
       {(settings.autoApprove || settings.autoPublish) && (
-        <Link href="/config" className="card mb-4 block border-brand/40 bg-brand/10">
-          <p className="text-[14px] font-semibold">
-            Piloto automatico ligado
-            {settings.autoPublish && ' — publicando sozinho'}
-          </p>
-          <p className="mt-1 text-[13px] leading-snug text-muted">
-            {describeAutopilot(settings)}. Toque para ajustar ou desligar.
-          </p>
-        </Link>
+        <div
+          className={`card mb-4 ${
+            blockers.some((b) => b.severity === 'alta')
+              ? 'border-amber-900/60 bg-amber-950/30'
+              : 'border-brand/40 bg-brand/10'
+          }`}
+        >
+          <Link href="/config" className="block">
+            <p className="text-[14px] font-semibold">
+              Piloto automatico ligado
+              {settings.autoPublish && ' — publicando sozinho'}
+            </p>
+            <p className="mt-1 text-[13px] leading-snug text-muted">
+              {describeAutopilot(settings)}. Toque para ajustar ou desligar.
+            </p>
+          </Link>
+
+          {/* Um piloto que roda sem entregar nada nao da erro em lugar nenhum:
+              os jobs ficam verdes e o canal fica parado. E aqui que isso vira
+              uma frase, com o que fazer a respeito logo abaixo. */}
+          {blockers.length > 0 && (
+            <ul className="mt-3 flex flex-col gap-2 border-t border-line pt-3">
+              {blockers.map((blocker) => (
+                <li key={blocker.label}>
+                  <p
+                    className={`text-[13px] font-semibold ${
+                      blocker.severity === 'alta' ? 'text-amber-300' : ''
+                    }`}
+                  >
+                    {blocker.label}
+                  </p>
+                  <p className="mt-0.5 text-[12px] leading-snug text-muted">{blocker.hint}</p>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       )}
 
       {/* Só chamamos atenção para o que está faltando; configuração completa
@@ -225,6 +272,7 @@ const JOB_LABELS: Record<string, string> = {
   ideas: 'Geracao de ideias',
   render: 'Renderizacao de video',
   publish: 'Publicacao no TikTok',
+  auto: 'Piloto automatico',
 };
 
 function Stat({
