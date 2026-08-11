@@ -20,7 +20,8 @@
     "ideas": "tsx scripts/generate-ideas.ts",
     "render": "tsx scripts/render-video.ts",
     "publish": "tsx scripts/publish-video.ts",
-    "queue": "tsx scripts/run-queue.ts"
+    "queue": "tsx scripts/run-queue.ts",
+    "auto": "tsx scripts/autopilot.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.115.0",

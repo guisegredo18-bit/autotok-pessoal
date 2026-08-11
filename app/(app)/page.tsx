@@ -3,16 +3,19 @@ import { sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { ideas, jobs, trends, videos } from '@/lib/db/schema';
 import { getSettings } from '@/lib/db/settings';
+import { autopilotBlockers, describeAutopilot } from '@/lib/pipeline/autopilot';
 import { integrationStatus } from '@/lib/env';
 import { getAccount } from '@/lib/tiktok/account';
 import { ActionButton } from '@/components/action-button';
 import { PageHeader, StatusPill, compact, timeAgo } from '@/components/ui';
-import { generateFromTrendsAction } from '@/app/actions';
+import { generateFromTrendsAction, runAutopilotAction } from '@/app/actions';
 import { runningCommit } from '@/lib/version';
 
 export const dynamic = 'force-dynamic';
 // O botao "Gerar ideias" tambem vive aqui, e a geracao roda na requisicao.
-export const maxDuration = 60;
+// Com o piloto automatico ligado, ela ainda renderiza o primeiro video antes
+// de responder — os mesmos 300s da tela de Ideias, pelo mesmo motivo.
+export const maxDuration = 300;
 
 async function count(table: any, where: any): Promise<number> {
   const [row] = await db.select({ n: sql<number>`count(*)::int` }).from(table).where(where);
@@ -40,6 +43,25 @@ export default async function Dashboard() {
     db.select().from(jobs).orderBy(sql`${jobs.startedAt} desc`).limit(5),
   ]);
 
+  const [ideasAboveScore, lastPublished] = await Promise.all([
+    count(ideas, sql`${ideas.status} = 'pending' and ${ideas.score} >= ${settings.autoMinScore}`),
+    db
+      .select({ at: videos.publishedAt })
+      .from(videos)
+      .where(sql`${videos.status} = 'published'`)
+      .orderBy(sql`${videos.publishedAt} desc`)
+      .limit(1),
+  ]);
+
+  const blockers = autopilotBlockers({
+    settings,
+    connected: Boolean(account),
+    canPostPublic: account?.canPostPublic ?? false,
+    pendingIdeas: stats.pendingIdeas,
+    pendingAboveScore: ideasAboveScore,
+    lastPublishedAt: lastPublished[0]?.at ?? null,
+  });
+
   const status = integrationStatus();
   const missing = Object.entries(status)
     .filter(([, ok]) => !ok)
@@ -51,6 +73,56 @@ export default async function Dashboard() {
         title="AutoTok"
         subtitle={`Nicho: ${settings.niche}`}
       />
+
+      {/* Piloto ligado significa que coisas acontecem sem você abrir o app.
+          Quem não sabe disso ao olhar a tela inicial descobre pelo TikTok, que
+          é o pior lugar para descobrir. Desligado, não ocupa espaço. */}
+      {(settings.autoApprove || settings.autoPublish) && (
+        <div
+          className={`card mb-4 ${
+            blockers.some((b) => b.severity === 'alta')
+              ? 'border-amber-900/60 bg-amber-950/30'
+              : 'border-brand/40 bg-brand/10'
+          }`}
+        >
+          <Link href="/config" className="block">
+            <p className="text-[14px] font-semibold">
+              Piloto automatico ligado
+              {settings.autoPublish && ' — publicando sozinho'}
+            </p>
+            <p className="mt-1 text-[13px] leading-snug text-muted">
+              {describeAutopilot(settings)}. Toque para ajustar ou desligar.
+            </p>
+          </Link>
+
+          {/* Um piloto que roda sem entregar nada nao da erro em lugar nenhum:
+              os jobs ficam verdes e o canal fica parado. E aqui que isso vira
+              uma frase, com o que fazer a respeito logo abaixo. */}
+          {blockers.length > 0 && (
+            <ul className="mt-3 flex flex-col gap-2 border-t border-line pt-3">
+              {blockers.map((blocker) => (
+                <li key={blocker.label}>
+                  <p
+                    className={`text-[13px] font-semibold ${
+                      blocker.severity === 'alta' ? 'text-amber-300' : ''
+                    }`}
+                  >
+                    {blocker.label}
+                  </p>
+                  <p className="mt-0.5 text-[12px] leading-snug text-muted">{blocker.hint}</p>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          {/* O piloto age no cron, de seis em seis horas. Nos primeiros dias
+              — que sao os que decidem se voce vai confiar nele — esperar ate
+              as 18h para ver o que ele escolhe e tempo demais. */}
+          <div className="mt-3 border-t border-line pt-3">
+            <ActionButton action={runAutopilotAction}>Rodar o piloto agora</ActionButton>
+          </div>
+        </div>
+      )}
 
       {/* Só chamamos atenção para o que está faltando; configuração completa
           não merece ocupar espaço na tela principal. */}
@@ -207,6 +279,7 @@ const JOB_LABELS: Record<string, string> = {
   ideas: 'Geracao de ideias',
   render: 'Renderizacao de video',
   publish: 'Publicacao no TikTok',
+  auto: 'Piloto automatico',
 };
 
 function Stat({
