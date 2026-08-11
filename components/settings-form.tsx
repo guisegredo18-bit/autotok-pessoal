@@ -137,6 +137,90 @@ export function SettingsForm({ settings }: { settings: AppSettings }) {
         </p>
       </div>
 
+      {/* O piloto e a unica configuracao daqui que age sem voce: por isso vem
+          numa moldura propria, com o que ele faz escrito antes das caixas, e
+          nao depois. */}
+      <fieldset className="rounded-xl border border-line bg-panel2/40 p-3">
+        <legend className="px-1 text-[13px] font-semibold">Piloto automatico</legend>
+        <p className="mb-3 text-[12px] leading-snug text-muted">
+          Deixa o canal andar sozinho: as ideias com nota alta viram video sem voce
+          tocar em <strong>Gravar video</strong>, e o video pronto vai para o TikTok
+          sem passar pela sua aprovacao. O teto de <strong>videos por dia</strong> e o
+          mesmo la de cima.
+        </p>
+
+        <label className="flex items-start gap-2.5 py-1.5">
+          <input
+            type="checkbox"
+            name="autoApprove"
+            defaultChecked={settings.autoApprove}
+            className="mt-0.5 h-4 w-4 shrink-0 accent-brand"
+          />
+          <span className="text-[14px] leading-snug">
+            Gravar sozinho as ideias boas
+            <span className="block text-[12px] text-muted">
+              Voce ainda assiste antes de publicar.
+            </span>
+          </span>
+        </label>
+
+        <label className="flex items-start gap-2.5 py-1.5">
+          <input
+            type="checkbox"
+            name="autoPublish"
+            defaultChecked={settings.autoPublish}
+            className="mt-0.5 h-4 w-4 shrink-0 accent-brand"
+          />
+          <span className="text-[14px] leading-snug">
+            Publicar sozinho no TikTok
+            <span className="block text-[12px] text-amber-300/90">
+              Ninguem assiste antes. Publicar e o unico passo do fluxo que nao tem
+              desfazer — e, enquanto o app nao passar na auditoria do TikTok, o video
+              chega na sua conta como privado de qualquer forma.
+            </span>
+          </span>
+        </label>
+
+        <div className="mt-3 grid grid-cols-2 gap-3">
+          <div>
+            <label className="label" htmlFor="autoMinScore">
+              Nota para agir sozinho
+            </label>
+            <input
+              id="autoMinScore"
+              name="autoMinScore"
+              type="number"
+              inputMode="numeric"
+              min={0}
+              max={100}
+              className="field"
+              defaultValue={settings.autoMinScore}
+            />
+          </div>
+          <div>
+            <label className="label" htmlFor="autoGapMinutes">
+              Intervalo entre posts (min)
+            </label>
+            <input
+              id="autoGapMinutes"
+              name="autoGapMinutes"
+              type="number"
+              inputMode="numeric"
+              min={0}
+              max={1440}
+              className="field"
+              defaultValue={settings.autoGapMinutes}
+            />
+          </div>
+        </div>
+        <p className="mt-1 text-[11px] leading-snug text-muted">
+          A nota daqui e mais exigente que a de cima de proposito: uma coisa e o
+          roteiro merecer a sua atencao, outra e merecer ir ao ar sem nenhuma. O
+          intervalo evita tres posts no mesmo minuto, que e o que o TikTok le como
+          conta automatizada.
+        </p>
+      </fieldset>
+
       <div>
         <label className="label" htmlFor="captionSignature">
           Assinatura da legenda
@@ -146,8 +230,13 @@ export function SettingsForm({ settings }: { settings: AppSettings }) {
           name="captionSignature"
           className="field"
           defaultValue={settings.captionSignature}
-          placeholder="ex: Segue pra mais dicas!"
+          placeholder="ex: Link na bio 👆"
         />
+        <p className="mt-1 text-[11px] leading-snug text-muted">
+          Vai no fim de toda legenda, inclusive nas que o piloto publica sozinho. O
+          TikTok nao deixa link clicavel na legenda — quem monetiza aponta para a bio,
+          e e esta linha que faz isso em todo video sem voce lembrar.
+        </p>
       </div>
 
       <div>

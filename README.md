@@ -1,7 +1,8 @@
 # AutoTok Pessoal
 
 Analisa as tendências do TikTok, escreve e renderiza vídeos automaticamente, e
-publica na sua conta **depois que você aprova pelo iPhone**.
+publica na sua conta **depois que você aprova pelo iPhone** — ou sozinho, se
+você ligar o [piloto automático](#piloto-automático--o-canal-andando-sozinho).
 
 O celular é o controle remoto: você aprova uma ideia, o vídeo é renderizado ali
 mesmo — o ffmpeg viaja junto com o painel — e em um a dois minutos ele aparece
@@ -45,7 +46,9 @@ sem terminal — ou **[pelo computador](#instalação-pelo-computador)**, se pre
    └─────────────┘
 ```
 
-Nada é publicado sem você tocar em **Aprovar e publicar**.
+Nada é publicado sem você tocar em **Aprovar e publicar** — a menos que você
+ligue o [piloto automático](#piloto-automático--o-canal-andando-sozinho), que
+existe justamente para dispensar esse toque.
 
 ---
 
@@ -80,7 +83,10 @@ Três limitações reais, para não haver surpresa:
 
 3. **Vídeo automático não substitui julgamento.** A IA dá uma nota honesta a
    cada roteiro e você define a nota mínima. Ainda assim, assista antes de
-   aprovar — é exatamente para isso que existe o passo de aprovação.
+   aprovar — é exatamente para isso que existe o passo de aprovação. Se você
+   quiser abrir mão dele mesmo assim, o
+   [piloto automático](#piloto-automático--o-canal-andando-sozinho) faz isso de
+   forma explícita, com teto diário e intervalo entre posts.
 
 ---
 
@@ -399,6 +405,65 @@ quando um vídeo não aparece, sem precisar abrir a aba de Actions no celular.
 
 ---
 
+## Piloto automático — o canal andando sozinho
+
+Se você não quer tocar em nada, **Configurações → Piloto automático** tem duas
+chaves independentes:
+
+| Chave | O que passa a acontecer |
+|---|---|
+| **Gravar sozinho as ideias boas** | A ideia com nota ≥ *nota para agir sozinho* vira vídeo sem você tocar em **Gravar vídeo**. Você ainda assiste antes de publicar. |
+| **Publicar sozinho no TikTok** | O vídeo pronto vai para o TikTok sem passar pela sua aprovação. Ninguém assiste antes. |
+
+Ligar as duas fecha o ciclo: três vezes por dia o GitHub Actions busca
+tendências, escreve roteiros, grava os melhores e publica — e a única coisa que
+chega até você é a notificação dizendo o que foi ao ar.
+
+**Três travas seguram o piloto**, e elas existem porque automatizar publicação
+sem elas não é automação, é um acidente com data marcada:
+
+- **Nota própria, mais alta que a das ideias.** A nota que faz um roteiro
+  merecer a sua atenção não é a mesma que o faz merecer ir ao ar sem nenhuma
+  atenção. Padrão: 75.
+- **Teto diário.** O mesmo **vídeos por dia** de sempre, contando também o que
+  você gravou na mão — o limite é do canal, não de quem apertou o botão.
+- **Intervalo entre posts.** Padrão de 90 minutos. Três vídeos prontos às 6h
+  não podem virar três posts às 6h01: nenhum perfil humano faz isso, e o TikTok
+  lê isso como conta automatizada.
+
+Duas coisas para saber antes de ligar a segunda chave:
+
+1. **Publicar é o único passo do fluxo que não tem desfazer.** Você continua
+   podendo barrar um vídeo: enquanto ele estiver na **Fila**, **Descartar** o
+   tira do caminho do piloto.
+2. **Antes da auditoria do TikTok, "publicar sozinho" significa "enviar sozinho
+   como privado"** — o mesmo comportamento descrito lá em cima. O vídeo aparece
+   na sua conta, mas só você o vê até tocar na privacidade dentro do TikTok.
+
+Ligado, o piloto aparece na tela inicial em destaque. Isso é de propósito: quem
+não vê na tela que o canal está publicando sozinho descobre pelo TikTok, que é o
+pior lugar para descobrir.
+
+### E o dinheiro?
+
+O piloto resolve produção e frequência, que é o que trava a maioria dos canais.
+O dinheiro vem de fora dele, e por caminhos que o TikTok e os programas de
+afiliado definem:
+
+- A **assinatura da legenda** (em Configurações) entra em todo vídeo, inclusive
+  nos que o piloto publica sozinho. O TikTok não aceita link clicável na
+  legenda, então é ali que se aponta para a bio — que é onde o link que paga
+  fica de fato.
+- Volume constante é pré-requisito de qualquer monetização do TikTok
+  (Creator Rewards exige vídeos acima de um minuto e conta elegível; afiliado
+  exige tráfego). Nada disso é ligado por código; o piloto só garante que o
+  canal não pare.
+
+Nenhum número de ganho é estimado no painel: um total que não fecha com o
+extrato da plataforma é pior do que total nenhum.
+
+---
+
 ## Ajustando o conteúdo
 
 Em **Configurações** você define:
@@ -409,7 +474,8 @@ Em **Configurações** você define:
 | **Formato** | `viral` (curiosidades, listas) ou `produto` (review, afiliado). |
 | **Nota mínima** | Ideias com nota abaixo disso são descartadas antes de chegar em você. |
 | **Duração alvo** | Segundos. 25–35s costuma ser o ponto ideal no TikTok. |
-| **Vídeos por dia** | Teto de segurança para o cron não render 50 vídeos. |
+| **Vídeos por dia** | Teto de segurança para o cron não render 50 vídeos. Vale também para o piloto automático. |
+| **Piloto automático** | Grava e/ou publica sozinho. Ver a seção própria acima. |
 | **Palavras proibidas** | Termos que a IA nunca deve usar. |
 
 Para mudar a estrutura narrativa dos vídeos, edite os textos em
@@ -479,6 +545,7 @@ lib/
   tts/                narração (Edge grátis ou ElevenLabs)
   tiktok/             OAuth e Content Posting API
   pipeline/           orquestração (ideias → render → publicação)
+                      e o piloto automático (autopilot.ts, queue.ts)
   db/                 schema e configurações
 scripts/              entrypoints usados pelo GitHub Actions
 tests/                testes da lógica pura (rodam offline)

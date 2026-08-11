@@ -13,15 +13,11 @@ import { hydrateEnv, saveSecrets, type SecretValues } from '@/lib/secrets';
 import { login, logout, requireAuth } from '@/lib/auth';
 import { runScan } from '@/lib/pipeline/trends';
 import { generateIdeasFromTrends, generateIdeasForTopic } from '@/lib/pipeline/ideas';
-import { enqueueRender, renderQueuedVideo } from '@/lib/pipeline/render';
+import { enqueueRender } from '@/lib/pipeline/render';
+import { autoApproveIdeas, requestRender, resolveRenderEngine } from '@/lib/pipeline/queue';
 import { publishVideo } from '@/lib/pipeline/publish';
 import { canDispatch, dispatch } from '@/lib/dispatch';
-import {
-  cancelPendingRuns,
-  listRecentRuns,
-  putSecret,
-  queueHealth,
-} from '@/lib/github/repo';
+import { cancelPendingRuns, putSecret } from '@/lib/github/repo';
 import { disconnectAccount } from '@/lib/tiktok/account';
 import { env } from '@/lib/env';
 
@@ -194,11 +190,28 @@ export async function generateIdeasAction(
       };
     }
 
+    /**
+     * Com o piloto ligado, gerar ideias ja e gravar video.
+     *
+     * So o primeiro renderiza dentro desta requisicao: um render leva de um a
+     * dois minutos e o teto da funcao na Vercel e de cinco. Os demais ficam na
+     * fila e saem no proximo cron — que e o preco honesto de nao ter servidor
+     * proprio, e continua sendo automatico do seu lado.
+     */
+    const auto = await autoApproveIdeas({ inlineLimit: 1 });
+
+    revalidatePath('/fila');
+
+    const base = `${result.created} ideia(s) criada(s)${
+      result.discarded > 0 ? `, ${result.discarded} descartada(s) por nota baixa` : ''
+    }.`;
+
     return {
       ok: true,
-      message: `${result.created} ideia(s) criada(s)${
-        result.discarded > 0 ? `, ${result.discarded} descartada(s) por nota baixa` : ''
-      }. Veja abaixo.`,
+      message:
+        auto.videoIds.length > 0
+          ? `${base} O piloto automatico ja mandou ${auto.videoIds.length} para virar video.`
+          : `${base} Veja abaixo.`,
     };
   } catch (err) {
     return fail(err);
@@ -208,70 +221,6 @@ export async function generateIdeasAction(
 /** Atalho do painel inicial: gera ideias direto das tendencias, sem assunto. */
 export async function generateFromTrendsAction(): Promise<ActionState> {
   return generateIdeasAction(null, new FormData());
-}
-
-/**
- * Qual motor de renderizacao esta valendo.
- *
- * Sem token nao ha para onde despachar, entao a preferencia por `github` nao
- * se sustenta e vira `manual` — deixar o video esperando e mais honesto do que
- * tentar renderizar onde talvez nao haja ffmpeg. A preferencia existe para
- * trocar de motor sem apagar o token: o mesmo token continua servindo para
- * cadastrar secrets e diagnosticar a fila do Actions.
- */
-async function motorDeRender(): Promise<AppSettings['renderEngine']> {
-  const { renderEngine } = await getSettings();
-  if (renderEngine !== 'github') return renderEngine;
-
-  // Sem token nao ha para onde despachar.
-  if (!canDispatch()) return 'aqui';
-
-  // Com a fila do GitHub parada, despachar e so escolher nao renderizar: o job
-  // e criado e fica esperando uma maquina que nao vem. Renderizar aqui demora
-  // mais, mas termina — e terminar e o unico requisito que importa.
-  const health = queueHealth(await listRecentRuns(10).catch(() => []));
-  return health.stuck ? 'aqui' : 'github';
-}
-
-/**
- * Manda o video para a renderizacao — e registra na propria linha quando o
- * disparo nao foi aceito.
- *
- * Sem isso, um disparo recusado deixava o video em "na fila" para sempre: a
- * tela dizia "renderizando, atualize em alguns minutos" enquanto nenhum job
- * existia do outro lado, e a unica pista era um toast vermelho que some ao
- * trocar de aba. Gravando o erro na linha, a Fila mostra o motivo e o botao
- * de tentar de novo aparece.
- */
-async function requestRender(videoId: string): Promise<AppSettings['renderEngine']> {
-  const motor = await motorDeRender();
-
-  // `manual` nao chama ninguem de proposito: o video fica em "na fila" ate
-  // alguem com uma maquina — o caderno do Colab, um terminal — pegar a fila.
-  if (motor === 'manual') return motor;
-
-  if (motor === 'aqui') {
-    // Esperar de proposito, e nao disparar em segundo plano: na Vercel a
-    // funcao e congelada assim que a resposta sai, e um render iniciado com
-    // `void` morreria no meio deixando o video preso em "renderizando" — o
-    // mesmo sintoma que a fila travada do GitHub produzia. O botao ja mostra
-    // "aguarde"; se o celular bloquear a tela e a conexao cair, o servidor
-    // termina o trabalho assim mesmo e o resultado aparece na Fila.
-    await renderQueuedVideo(videoId);
-    return motor;
-  }
-
-  try {
-    await dispatch('render-video', { video_id: videoId });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    await db
-      .update(videos)
-      .set({ status: 'failed', error: message.slice(0, 2000) })
-      .where(eq(videos.id, videoId));
-    throw err;
-  }
-  return motor;
 }
 
 export async function approveIdeaAction(ideaId: string): Promise<ActionState> {
@@ -313,7 +262,7 @@ export async function publishVideoAction(videoId: string): Promise<ActionState> 
   try {
     await guard();
 
-    if ((await motorDeRender()) === 'github') {
+    if ((await resolveRenderEngine()) === 'github') {
       await db.update(videos).set({ status: 'publishing' }).where(eq(videos.id, videoId));
       await dispatch('publish-video', { video_id: videoId });
       revalidatePath('/fila');
@@ -432,7 +381,7 @@ export async function retryVideoAction(videoId: string): Promise<ActionState> {
       .where(eq(videos.id, videoId));
 
     // Nao ha mais o aviso de "a fila do GitHub esta travada, nao adianta
-    // reenviar": quando ela esta, `motorDeRender` ja desvia para renderizar
+    // reenviar": quando ela esta, `resolveRenderEngine` ja desvia para renderizar
     // aqui. Um botao que renderiza vale mais que um botao que explica.
     const motor = await requestRender(videoId);
 
@@ -476,6 +425,11 @@ export async function saveSettingsAction(
       targetDuration: Math.max(10, Math.min(180, num('targetDuration', 30))),
       captionSignature: String(form.get('captionSignature') ?? '').trim(),
       renderEngine: parseRenderEngine(form.get('renderEngine')),
+      // Caixa desmarcada nao chega no FormData — a ausencia e o "desligado".
+      autoApprove: form.get('autoApprove') === 'on',
+      autoPublish: form.get('autoPublish') === 'on',
+      autoMinScore: Math.max(0, Math.min(100, num('autoMinScore', 75))),
+      autoGapMinutes: Math.max(0, Math.min(24 * 60, num('autoGapMinutes', 90))),
       blockedWords: String(form.get('blockedWords') ?? '')
         .split(',')
         .map((w) => w.trim())

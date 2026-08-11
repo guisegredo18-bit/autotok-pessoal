@@ -3,6 +3,7 @@ import { sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { ideas, jobs, trends, videos } from '@/lib/db/schema';
 import { getSettings } from '@/lib/db/settings';
+import { describeAutopilot } from '@/lib/pipeline/autopilot';
 import { integrationStatus } from '@/lib/env';
 import { getAccount } from '@/lib/tiktok/account';
 import { ActionButton } from '@/components/action-button';
@@ -12,7 +13,9 @@ import { runningCommit } from '@/lib/version';
 
 export const dynamic = 'force-dynamic';
 // O botao "Gerar ideias" tambem vive aqui, e a geracao roda na requisicao.
-export const maxDuration = 60;
+// Com o piloto automatico ligado, ela ainda renderiza o primeiro video antes
+// de responder — os mesmos 300s da tela de Ideias, pelo mesmo motivo.
+export const maxDuration = 300;
 
 async function count(table: any, where: any): Promise<number> {
   const [row] = await db.select({ n: sql<number>`count(*)::int` }).from(table).where(where);
@@ -51,6 +54,21 @@ export default async function Dashboard() {
         title="AutoTok"
         subtitle={`Nicho: ${settings.niche}`}
       />
+
+      {/* Piloto ligado significa que coisas acontecem sem você abrir o app.
+          Quem não sabe disso ao olhar a tela inicial descobre pelo TikTok, que
+          é o pior lugar para descobrir. Desligado, não ocupa espaço. */}
+      {(settings.autoApprove || settings.autoPublish) && (
+        <Link href="/config" className="card mb-4 block border-brand/40 bg-brand/10">
+          <p className="text-[14px] font-semibold">
+            Piloto automatico ligado
+            {settings.autoPublish && ' — publicando sozinho'}
+          </p>
+          <p className="mt-1 text-[13px] leading-snug text-muted">
+            {describeAutopilot(settings)}. Toque para ajustar ou desligar.
+          </p>
+        </Link>
+      )}
 
       {/* Só chamamos atenção para o que está faltando; configuração completa
           não merece ocupar espaço na tela principal. */}

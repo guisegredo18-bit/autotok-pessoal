@@ -4,6 +4,7 @@ import { ideas, videos, type Scene } from '@/lib/db/schema';
 import { getSettings } from '@/lib/db/settings';
 import { buildCaption } from '@/lib/ai/script';
 import { voiceForMarket } from '@/lib/ai/mercado';
+import { autoPublishReady } from '@/lib/pipeline/autopilot';
 import { renderVideo } from '@/lib/video/render';
 import { putFile } from '@/lib/storage';
 import { push } from '@/lib/notify';
@@ -96,11 +97,36 @@ async function renderInner(videoId: string, log: (message: string) => void): Pro
     await db.update(ideas).set({ status: 'rendered' }).where(eq(ideas.id, idea.id));
 
     await push({
-      title: 'Video pronto para aprovacao',
-      message: `${idea.hook}\n\n${Math.round(result.durationSeconds)}s — abra o painel para assistir e aprovar.`,
+      title: settings.autoPublish ? 'Video pronto — indo para o TikTok' : 'Video pronto para aprovacao',
+      message: settings.autoPublish
+        ? `${idea.hook}\n\n${Math.round(result.durationSeconds)}s — o piloto automatico publica sozinho. Abra a Fila se quiser barrar antes.`
+        : `${idea.hook}\n\n${Math.round(result.durationSeconds)}s — abra o painel para assistir e aprovar.`,
       url: `${env.appUrl}/fila`,
       tags: ['clapper'],
     });
+
+    /**
+     * Com o piloto ligado, o video vai ao ar aqui mesmo.
+     *
+     * Publicar logo apos renderizar e o que faz a automacao valer: o roteiro
+     * nasceu de uma tendencia do dia, e esperar o proximo cron pode custar
+     * justamente a janela em que o assunto rende. A trava de intervalo e o
+     * teto diario continuam valendo — quem decide e o piloto, nao este ponto
+     * do codigo.
+     *
+     * Falhar aqui nao desfaz o render: o video esta pronto e guardado, e o
+     * erro da publicacao ja foi gravado e notificado. Marcar o render como
+     * falho por causa disso mandaria voce renderizar de novo o que nao
+     * precisa.
+     */
+    if (settings.autoPublish) {
+      try {
+        const auto = await autoPublishReady(log);
+        if (auto.published.length === 0 && auto.reason) log(`piloto: ${auto.reason}`);
+      } catch (err) {
+        log(`piloto: falhou ao publicar — ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     await db

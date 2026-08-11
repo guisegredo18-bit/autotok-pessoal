@@ -41,6 +41,35 @@ export type AppSettings = {
    */
   renderEngine: RenderEngine;
   /**
+   * Piloto automatico da aprovacao: ideia com nota alta vira video sozinha,
+   * sem voce tocar em "Gravar video".
+   */
+  autoApprove: boolean;
+  /**
+   * Piloto automatico da publicacao: video renderizado vai para o TikTok
+   * sozinho, sem passar pela sua aprovacao na Fila.
+   *
+   * Este e o unico passo irreversivel do fluxo — por isso nasce desligado e
+   * so liga por escolha explicita na tela.
+   */
+  autoPublish: boolean;
+  /**
+   * Nota minima para o piloto agir por conta propria.
+   *
+   * E separada de `minScore` de proposito: aquela decide o que merece a sua
+   * atencao, esta decide o que merece ir ao ar sem nenhuma atencao. A segunda
+   * pergunta e mais exigente que a primeira, entao o padrao e mais alto.
+   */
+  autoMinScore: number;
+  /**
+   * Minutos entre uma publicacao automatica e a proxima.
+   *
+   * Sem isso, tres videos prontos ao mesmo tempo virariam tres posts no mesmo
+   * minuto — o que nenhum perfil humano faz, e o TikTok trata como sinal de
+   * conta automatizada. Zero desliga o espacamento.
+   */
+  autoGapMinutes: number;
+  /**
    * Se `renderEngine` foi de fato escolhido por alguem.
    *
    * Ate a versao que embutiu o ffmpeg no painel, o formulario lia esse campo
@@ -64,6 +93,12 @@ export const DEFAULT_SETTINGS: AppSettings = {
   captionSignature: '',
   blockedWords: [],
   renderEngine: DEFAULT_RENDER_ENGINE,
+  // O piloto nasce desligado: quem instalou pediu um painel de aprovacao, e
+  // ligar sozinho o que publica sozinho seria decidir no lugar da pessoa.
+  autoApprove: false,
+  autoPublish: false,
+  autoMinScore: 75,
+  autoGapMinutes: 90,
   renderEngineChosen: false,
 };
 

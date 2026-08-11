@@ -1,7 +1,9 @@
-name: Tendencias e ideias
+name: Tendencias, ideias e piloto automatico
 
-# Roda sozinho 3x por dia e tambem sob demanda. Nao e o caminho principal:
-# gerar ideias tambem funciona direto no painel, com resposta imediata.
+# Roda sozinho 3x por dia e tambem sob demanda. Nao e o caminho principal para
+# gerar ideias — isso tambem funciona direto no painel, com resposta imediata.
+# Mas e o caminho principal do piloto automatico: e aqui que o canal anda
+# sozinho quando ninguem abre o app.
 on:
   schedule:
     # 06:00, 12:00 e 18:00 no horario de Brasilia (UTC-3).
@@ -17,7 +19,9 @@ concurrency:
 jobs:
   run:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # O piloto pode renderizar os videos aqui mesmo (motor "aqui"), e cada um
+    # leva de dois a quatro minutos. Vinte minutos cortavam o terceiro no meio.
+    timeout-minutes: 60
     env:
       # Apenas dois secrets sao necessarios: onde estao as chaves, e com o que
       # elas foram cifradas. Todo o resto (Gemini, Pexels, R2, TikTok, ntfy)
@@ -34,6 +38,11 @@ jobs:
           git clone --depth 1 --branch "${{ github.ref_name }}" \
             "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" .
 
+      # O piloto renderiza neste mesmo job quando o motor e "aqui". O binario
+      # estatico do npm serviria, mas o do sistema e bem mais rapido.
+      - name: Conferir ambiente
+        run: ffmpeg -version >/dev/null 2>&1 || (sudo apt-get update && sudo apt-get install -y ffmpeg)
+
       - run: npm install --no-audit --no-fund
 
       # A coleta automatica depende do Creative Center, que o TikTok fechou.
@@ -46,3 +55,8 @@ jobs:
       - name: Gerar ideias
         if: github.event.action != 'scan-trends'
         run: npm run ideas
+
+      # Sem o piloto ligado nas Configuracoes, este passo imprime uma linha e
+      # sai. Com ele ligado, e o passo que grava e publica os videos do dia.
+      - name: Piloto automatico
+        run: npm run auto
