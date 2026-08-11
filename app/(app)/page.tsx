@@ -8,7 +8,7 @@ import { integrationStatus } from '@/lib/env';
 import { getAccount } from '@/lib/tiktok/account';
 import { ActionButton } from '@/components/action-button';
 import { PageHeader, StatusPill, compact, timeAgo } from '@/components/ui';
-import { generateFromTrendsAction } from '@/app/actions';
+import { generateFromTrendsAction, runAutopilotAction } from '@/app/actions';
 import { runningCommit } from '@/lib/version';
 
 export const dynamic = 'force-dynamic';
@@ -114,6 +114,13 @@ export default async function Dashboard() {
               ))}
             </ul>
           )}
+
+          {/* O piloto age no cron, de seis em seis horas. Nos primeiros dias
+              — que sao os que decidem se voce vai confiar nele — esperar ate
+              as 18h para ver o que ele escolhe e tempo demais. */}
+          <div className="mt-3 border-t border-line pt-3">
+            <ActionButton action={runAutopilotAction}>Rodar o piloto agora</ActionButton>
+          </div>
         </div>
       )}
 

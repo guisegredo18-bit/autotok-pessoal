@@ -32,6 +32,7 @@ export type RoundResult = {
 
 export async function runAutopilotRound(
   log: (message: string) => void = () => {},
+  options: { inlineLimit?: number } = {},
 ): Promise<RoundResult> {
   await hydrateEnv();
 
@@ -42,7 +43,10 @@ export async function runAutopilotRound(
   };
 
   try {
-    const aprovadas = await autoApproveIdeas({ log: registra });
+    const aprovadas = await autoApproveIdeas({
+      log: registra,
+      inlineLimit: options.inlineLimit,
+    });
     if (aprovadas.reason) registra(`aprovacao: ${aprovadas.reason}`);
 
     const publicados = await autoPublishReady(registra);

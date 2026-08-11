@@ -463,6 +463,12 @@ O painel não espera você desconfiar:
 
 Teto diário atingido **não** gera aviso nenhum — isso é o piloto funcionando.
 
+E há um botão **Rodar o piloto agora**, no mesmo cartão. O piloto age no cron,
+de seis em seis horas; nos primeiros dias — que são os que decidem se você vai
+confiar nele — esperar até as 18h para ver o que ele escolhe é tempo demais.
+Como no resto do painel, só o primeiro vídeo é renderizado dentro da
+requisição; os demais ficam na fila.
+
 ### E o dinheiro?
 
 O piloto resolve produção e frequência, que é o que trava a maioria dos canais.

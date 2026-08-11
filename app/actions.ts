@@ -15,6 +15,7 @@ import { runScan } from '@/lib/pipeline/trends';
 import { generateIdeasFromTrends, generateIdeasForTopic } from '@/lib/pipeline/ideas';
 import { enqueueRender } from '@/lib/pipeline/render';
 import { autoApproveIdeas, requestRender, resolveRenderEngine } from '@/lib/pipeline/queue';
+import { runAutopilotRound } from '@/lib/pipeline/round';
 import { publishVideo } from '@/lib/pipeline/publish';
 import { canDispatch, dispatch } from '@/lib/dispatch';
 import { cancelPendingRuns, putSecret } from '@/lib/github/repo';
@@ -221,6 +222,39 @@ export async function generateIdeasAction(
 /** Atalho do painel inicial: gera ideias direto das tendencias, sem assunto. */
 export async function generateFromTrendsAction(): Promise<ActionState> {
   return generateIdeasAction(null, new FormData());
+}
+
+/**
+ * Roda uma rodada do piloto agora, sem esperar o cron.
+ *
+ * Serve para os primeiros dias, que sao os que decidem se voce vai confiar
+ * nele: em vez de ligar as chaves e esperar ate as 18h para ver o que ele
+ * escolhe, voce ve em um toque. Depois disso o botao vira o que ele deveria
+ * ser — desnecessario.
+ */
+export async function runAutopilotAction(): Promise<ActionState> {
+  try {
+    await guard();
+
+    // So o primeiro video renderiza dentro da requisicao, pelo mesmo motivo de
+    // sempre: tres renders em serie estouram o teto de tempo da Vercel.
+    const result = await runAutopilotRound(() => {}, { inlineLimit: 1 });
+
+    revalidatePath('/');
+    revalidatePath('/fila');
+    revalidatePath('/ideias');
+
+    const impedimento = result.blockers[0];
+    if (result.approved === 0 && result.published === 0 && impedimento) {
+      // Rodada vazia com impedimento nao e sucesso: devolver "ok" aqui
+      // deixaria a tela verde justamente quando ha algo a consertar.
+      return { ok: false, message: `${impedimento.label}. ${impedimento.hint}` };
+    }
+
+    return { ok: true, message: result.summary };
+  } catch (err) {
+    return fail(err);
+  }
 }
 
 export async function approveIdeaAction(ideaId: string): Promise<ActionState> {
