@@ -36,8 +36,6 @@ export const REQUIRED_TABLES = [
   'videos',
   'accounts',
   'jobs',
-  'affiliate_products',
-  'commissions',
 ] as const;
 
 export async function databaseIsReady(): Promise<boolean> {

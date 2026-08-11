@@ -216,36 +216,6 @@ async function prepareBackground(
 ): Promise<Background> {
   const query = scene.visual;
 
-  /**
-   * Imagem exata (a foto do produto) vence a busca no banco de imagens.
-   *
-   * Vem primeiro de proposito, antes ate da checagem da chave do Pexels: um
-   * video de produto nao deveria precisar de banco de imagens nenhum, e sem
-   * isto ele sairia com fundo liso so porque o Pexels nao esta configurado.
-   */
-  if (scene.imageUrl) {
-    try {
-      // Reusa `downloadAsset` (em vez de um fetch solto) para herdar o teto de
-      // tamanho e continuar substituivel nos testes. As dimensoes vao zeradas
-      // porque nao as conhecemos e ele so le a URL — o ffmpeg descobre o resto.
-      const data = await deps.downloadAsset({
-        kind: 'image',
-        url: scene.imageUrl,
-        width: 0,
-        height: 0,
-      });
-      const file = `bg_${index}.jpg`;
-      await fs.writeFile(path.join(dir, file), data);
-      return { kind: 'image', file };
-    } catch (err) {
-      // Cai na busca normal abaixo: melhor uma foto generica do que fundo liso.
-      warnings.push(
-        `Nao consegui baixar a imagem do produto na cena ${index + 1} ` +
-          `(${err instanceof Error ? err.message : err}).`,
-      );
-    }
-  }
-
   if (!env.pexelsApiKey) {
     if (index === 0) {
       warnings.push('PEXELS_API_KEY nao configurada — os videos saem com fundo liso.');

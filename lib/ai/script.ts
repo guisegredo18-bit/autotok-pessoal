@@ -4,8 +4,6 @@ import {
   TEMPLATES,
   commonRules,
   contextBlock,
-  productBlock,
-  type ProductContext,
   type TemplateName,
 } from './templates';
 import { market } from './mercado';
@@ -102,8 +100,6 @@ export type GenerateOptions = {
   count: number;
   trendName?: string;
   trendKind?: string;
-  /** Quando presente, o roteiro fala deste produto — e nao de um assunto. */
-  product?: ProductContext;
 };
 
 /** Gera N ideias de video completas para uma tendencia. */
@@ -114,7 +110,6 @@ export async function generateIdeas(opts: GenerateOptions): Promise<GeneratedIde
 
   const prompt = `
 ${contextBlock(opts.settings, opts.trendName, opts.trendKind)}
-${opts.product ? productBlock(opts.product) : ''}
 
 ${template.structure}
 

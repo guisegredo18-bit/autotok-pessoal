@@ -46,13 +46,6 @@ export const SECRET_FIELDS = [
   'githubRepo',
   'ntfyTopic',
   'trendCountry',
-  'hotmartClientId',
-  'hotmartClientSecret',
-  'hotmartBasic',
-  'amazonAccessKey',
-  'amazonSecretKey',
-  'amazonPartnerTag',
-  'amazonMarketplace',
 ] as const;
 
 export type SecretField = (typeof SECRET_FIELDS)[number];
@@ -94,13 +87,6 @@ export const FIELD_ENV_VAR: Record<SecretField, string> = {
   githubRepo: 'GITHUB_REPO',
   ntfyTopic: 'NTFY_TOPIC',
   trendCountry: 'TREND_COUNTRY',
-  hotmartClientId: 'HOTMART_CLIENT_ID',
-  hotmartClientSecret: 'HOTMART_CLIENT_SECRET',
-  hotmartBasic: 'HOTMART_BASIC',
-  amazonAccessKey: 'AMAZON_ACCESS_KEY',
-  amazonSecretKey: 'AMAZON_SECRET_KEY',
-  amazonPartnerTag: 'AMAZON_PARTNER_TAG',
-  amazonMarketplace: 'AMAZON_MARKETPLACE',
 };
 
 /** true quando o valor foi definido no ambiente, e nao herdado de um padrao. */
@@ -123,9 +109,6 @@ export const SENSITIVE_FIELDS: SecretField[] = [
   's3SecretAccessKey',
   'tiktokClientSecret',
   'githubToken',
-  'hotmartClientSecret',
-  'hotmartBasic',
-  'amazonSecretKey',
 ];
 
 const STORE_KEY = 'secrets';

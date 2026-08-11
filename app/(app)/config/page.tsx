@@ -22,8 +22,6 @@ const CHECKS: { key: keyof ReturnType<typeof integrationStatus>; label: string; 
   { key: 'tiktok', label: 'App do TikTok', hint: 'client key e secret' },
   { key: 'tts', label: 'Narracao', hint: 'Edge TTS e gratis e ja vem ligado' },
   { key: 'push', label: 'Notificacao no iPhone', hint: 'topico do ntfy' },
-  { key: 'hotmart', label: 'Hotmart', hint: 'client id e secret, para as comissoes' },
-  { key: 'amazon', label: 'Amazon Associates', hint: 'chaves da PA-API e tag de afiliado' },
 ];
 
 /**
