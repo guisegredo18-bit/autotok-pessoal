@@ -13,8 +13,9 @@ import { runningCommit } from '@/lib/version';
 
 export const dynamic = 'force-dynamic';
 // O botao "Gerar ideias" tambem vive aqui, e a geracao roda na requisicao.
-// Com o piloto automatico ligado, ela ainda renderiza o primeiro video antes
-// de responder — os mesmos 300s da tela de Ideias, pelo mesmo motivo.
+// Escrever roteiro leva ~15s; o teto alto cobre um provedor de IA lento sem
+// derrubar a tela. Renderizar video nao acontece mais por este caminho — ver
+// o comentario em `generateIdeasAction`.
 export const maxDuration = 300;
 
 async function count(table: any, where: any): Promise<number> {
