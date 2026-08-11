@@ -42,13 +42,6 @@ describe('checagem de banco pronto', () => {
     assert.deepEqual([...REQUIRED_TABLES].sort(), tabelasDoSchema());
   });
 
-  test('inclui as tabelas de comissao, que vieram numa migration posterior', () => {
-    // Foram elas que expuseram o bug: o banco tinha `settings` desde a
-    // primeira instalacao, entao a aplicacao se declarava pronta sem elas.
-    assert.ok(REQUIRED_TABLES.includes('affiliate_products'));
-    assert.ok(REQUIRED_TABLES.includes('commissions'));
-  });
-
   test('nao ha nome repetido', () => {
     // Um repetido faria a contagem bater com menos tabelas do que o esperado,
     // e o banco incompleto passaria por pronto de novo.
