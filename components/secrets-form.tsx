@@ -58,6 +58,36 @@ const GROUPS: Group[] = [
     ],
   },
   {
+    // Ate aqui a narracao so existia em variavel de ambiente — quem instalou
+    // pelo celular nao tinha como trocar de provedor quando a voz caia, que e
+    // exatamente a hora em que precisa.
+    title: 'Narracao dos videos',
+    description:
+      'Edge e a voz do Google sao gratuitos e sem chave, mas recusam conexao de servidor de ' +
+      'vez em quando — quando isso acontece o video sai mudo. O Gemini usa a mesma chave que ' +
+      'escreve os roteiros e responde de qualquer lugar.',
+    fields: [
+      {
+        name: 'ttsProvider',
+        label: 'Voz',
+        options: [
+          { value: 'edge', label: 'Edge, com Google e Gemini de reserva (padrao)' },
+          { value: 'gemini', label: 'Gemini (usa a chave dos roteiros)' },
+          { value: 'google', label: 'Voz do Google Tradutor' },
+          { value: 'elevenlabs', label: 'ElevenLabs (pago por caractere)' },
+        ],
+      },
+      {
+        name: 'geminiTtsVoice',
+        label: 'Voz do Gemini',
+        placeholder: 'Kore',
+        hint: 'Kore, Puck, Charon, Aoede, Leda… fala o idioma do roteiro sozinha',
+      },
+      { name: 'elevenLabsApiKey', label: 'Chave da ElevenLabs', secret: true },
+      { name: 'elevenLabsVoiceId', label: 'ID da voz na ElevenLabs' },
+    ],
+  },
+  {
     title: 'Armazenamento dos videos',
     description:
       'Obrigatorio para renderizar no GitHub Actions. Use o Cloudflare R2 (10 GB gratis).',

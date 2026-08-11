@@ -78,3 +78,40 @@ export function usableModels(json: any): string[] {
     .map((m) => String(m?.name ?? ''))
     .filter(Boolean);
 }
+
+/**
+ * Escolhe um modelo de narracao entre os que a conta tem.
+ *
+ * `rankModels` nao serve aqui, e a razao e instrutiva: ele empurra `preview`
+ * para o fim, porque para escrever roteiro existe versao estavel e o preview
+ * some sem aviso. Em TTS nao existe versao estavel — todos os modelos de voz
+ * do Gemini sao preview hoje. Aplicar aquela regra aqui descartaria justamente
+ * o unico candidato.
+ *
+ * Entre os que sobram, `flash` primeiro: narrar nao precisa do modelo caro, e
+ * a cota gratuita do flash e maior.
+ */
+export function pickTtsModel(names: string[]): string | null {
+  const candidatos = names
+    .map((name) => name.replace(/^models\//, ''))
+    .filter((short) => /tts/i.test(short));
+
+  if (candidatos.length === 0) return null;
+
+  const pontuado = candidatos
+    .map((short) => ({
+      short,
+      rank: [
+        short.includes('flash') ? 1 : 0,
+        Number(short.match(/gemini-(\d+(?:\.\d+)?)/)?.[1] ?? 0),
+      ] as const,
+    }))
+    .sort((a, b) => {
+      for (let i = 0; i < a.rank.length; i++) {
+        if (a.rank[i] !== b.rank[i]) return b.rank[i] - a.rank[i];
+      }
+      return a.short.localeCompare(b.short);
+    });
+
+  return pontuado[0].short;
+}
