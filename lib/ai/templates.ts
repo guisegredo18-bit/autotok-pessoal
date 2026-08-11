@@ -1,4 +1,5 @@
 import type { AppSettings } from '@/lib/db/settings';
+import { market } from './mercado';
 
 /**
  * Templates de video.
@@ -57,10 +58,24 @@ ESTRUTURA OBRIGATORIA (video viral):
   },
 };
 
-/** Regras que valem para qualquer template. */
-export const COMMON_RULES = `
+/**
+ * Regras que valem para qualquer template.
+ *
+ * A regra de idioma sai do mercado configurado, e nao fica escrita aqui: era
+ * justamente ela que prendia o projeto ao Brasil enquanto a tela oferecia um
+ * campo de idioma que nao surtia efeito nenhum.
+ */
+export function commonRules(marketCode: unknown): string {
+  const alvo = market(marketCode);
+  return COMMON_RULES.replace('{{IDIOMA}}', alvo.writingRule).replace(
+    '{{LEGENDA_IDIOMA}}',
+    alvo.captionRule,
+  );
+}
+
+const COMMON_RULES = `
 REGRAS DE ESCRITA:
-- Portugues do Brasil, informal, como uma pessoa falando com um amigo.
+{{IDIOMA}}
 - Frases curtas. Cada cena e uma ou duas frases no maximo.
 - Nada de introducao tipo "ola pessoal" ou "hoje eu vou falar sobre". Va direto.
 - Nada de emoji no texto narrado (ele vai ser lido em voz alta).
@@ -73,6 +88,7 @@ CAMPO "visual" DE CADA CENA:
 - 2 a 5 palavras. Sem nomes de marca (nao existe no banco de imagens).
 
 LEGENDA E HASHTAGS:
+{{LEGENDA_IDIOMA}}
 - A legenda tem no maximo 150 caracteres e complementa o video, nao repete o roteiro.
 - 4 a 6 hashtags, misturando uma de alto volume, duas do nicho e uma da tendencia usada.
 - Escreva as hashtags sem o simbolo #, apenas a palavra.

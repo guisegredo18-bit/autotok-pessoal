@@ -47,6 +47,7 @@ type Search = Promise<{
   ordem?: string;
   categoria?: string;
   operando?: string;
+  moeda?: string;
 }>;
 
 export default async function ComissoesPage({ searchParams }: { searchParams: Search }) {
@@ -61,6 +62,7 @@ export default async function ComissoesPage({ searchParams }: { searchParams: Se
       source,
       category: params.categoria || undefined,
       operatingOnly: params.operando === '1',
+      currency: params.moeda === 'USD' ? 'USD' : undefined,
       orderBy,
     }),
     listProducts({ operatingOnly: true, limit: 100 }),

@@ -476,6 +476,8 @@ export type ProductFilter = {
   source?: 'amazon' | 'hotmart';
   category?: string;
   operatingOnly?: boolean;
+  /** Filtra pela moeda de origem — e assim que se isola o que paga em dolar. */
+  currency?: string;
   orderBy?: 'score' | 'commission' | 'price';
   limit?: number;
 };
@@ -485,6 +487,7 @@ export async function listProducts(filter: ProductFilter = {}) {
   if (filter.source) conditions.push(eq(affiliateProducts.source, filter.source));
   if (filter.category) conditions.push(eq(affiliateProducts.category, filter.category));
   if (filter.operatingOnly) conditions.push(eq(affiliateProducts.operating, true));
+  if (filter.currency) conditions.push(eq(affiliateProducts.currency, filter.currency));
 
   const order =
     filter.orderBy === 'commission'

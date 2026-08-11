@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { ideas, videos, type Scene } from '@/lib/db/schema';
 import { getSettings } from '@/lib/db/settings';
 import { buildCaption } from '@/lib/ai/script';
+import { voiceForMarket } from '@/lib/ai/mercado';
 import { renderVideo } from '@/lib/video/render';
 import { putFile } from '@/lib/storage';
 import { push } from '@/lib/notify';
@@ -52,6 +53,18 @@ async function renderInner(videoId: string, log: (message: string) => void): Pro
   if (!idea) throw new Error('Roteiro do video nao encontrado.');
 
   await db.update(videos).set({ status: 'rendering', error: null }).where(eq(videos.id, videoId));
+
+  /**
+   * A voz precisa falar o idioma do roteiro.
+   *
+   * Sem isto, um roteiro em ingles sairia narrado pela voz brasileira padrao —
+   * com sotaque de leitura fonetica, que nao vende para publico americano
+   * nenhum. Ajustar `env` aqui segue o mesmo padrao de `hydrateEnv`: a origem
+   * do valor e detalhe de configuracao, e o modulo de narracao continua lendo
+   * `env.ttsVoice` sem saber de mercado.
+   */
+  const settings = await getSettings();
+  env.ttsVoice = voiceForMarket(settings.language, env.ttsVoice);
 
   try {
     const result = await renderVideo(idea.scenes as Scene[], (msg) => {

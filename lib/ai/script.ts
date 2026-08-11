@@ -1,13 +1,14 @@
 import { z } from 'zod';
 import type { AppSettings } from '@/lib/db/settings';
 import {
-  COMMON_RULES,
   TEMPLATES,
+  commonRules,
   contextBlock,
   productBlock,
   type ProductContext,
   type TemplateName,
 } from './templates';
+import { market } from './mercado';
 import { getProvider } from './providers';
 import { InvalidJsonError, parseJson } from './json';
 
@@ -43,8 +44,20 @@ const BatchSchema = z.object({
 
 export type GeneratedIdea = z.infer<typeof IdeaSchema>;
 
+/**
+ * O prompt de sistema depende do mercado.
+ *
+ * "Especialista no mercado brasileiro" estava fixo aqui, e nenhuma
+ * configuracao de idioma alcancava esta linha — entao trocar o idioma na tela
+ * produzia um prompt que se contradizia: pedia ingles no contexto e brasileiro
+ * na especialidade. O modelo obedecia a um dos dois, sem criterio.
+ */
+function systemPrompt(marketCode: unknown): string {
+  return SYSTEM.replace('{{ESPECIALIDADE}}', market(marketCode).expertise);
+}
+
 const SYSTEM = `
-Voce e um roteirista de videos curtos para TikTok, especialista no mercado brasileiro.
+Voce e um roteirista de videos curtos para TikTok, {{ESPECIALIDADE}}.
 Voce escreve roteiros que prendem a atencao nos primeiros 3 segundos e mantem o
 espectador ate o fim. Voce conhece o ritmo do TikTok: cortes rapidos, linguagem
 falada, zero formalidade.
@@ -105,7 +118,7 @@ ${opts.product ? productBlock(opts.product) : ''}
 
 ${template.structure}
 
-${COMMON_RULES}
+${commonRules(opts.settings.language)}
 
 ${SHAPE}
 
@@ -121,7 +134,7 @@ aproximadamente ${opts.settings.targetDuration} segundos no total.
   // errado, e isso sai bem mais barato que exigir um provedor pago.
   for (let attempt = 0; attempt < 2; attempt++) {
     const text = await provider.complete({
-      system: SYSTEM,
+      system: systemPrompt(opts.settings.language),
       prompt:
         attempt === 0
           ? prompt

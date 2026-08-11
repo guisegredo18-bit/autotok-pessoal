@@ -7,6 +7,7 @@ import { db } from '@/lib/db';
 import { ideas, trends, videos } from '@/lib/db/schema';
 import { getSettings, saveSettings, type AppSettings } from '@/lib/db/settings';
 import { parseRenderEngine } from '@/lib/render-engine';
+import { parseMarket } from '@/lib/ai/mercado';
 import { prepareDatabase } from '@/lib/db/setup';
 import { hydrateEnv, saveSecrets, type SecretValues } from '@/lib/secrets';
 import { login, logout, requireAuth } from '@/lib/auth';
@@ -467,6 +468,8 @@ export async function saveSettingsAction(
       niche: String(form.get('niche') ?? '').trim(),
       template: (form.get('template') === 'produto' ? 'produto' : 'viral'),
       country: String(form.get('country') ?? 'BR').toUpperCase().slice(0, 2),
+      // Decide o idioma do roteiro e a voz da narracao — veja lib/ai/mercado.
+      language: parseMarket(form.get('language')),
       ideasPerScan: Math.max(1, Math.min(20, num('ideasPerScan', 5))),
       videosPerDay: Math.max(1, Math.min(20, num('videosPerDay', 3))),
       minScore: Math.max(0, Math.min(100, num('minScore', 60))),
