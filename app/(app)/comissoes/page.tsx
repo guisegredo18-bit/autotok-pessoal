@@ -7,6 +7,7 @@ import { integrationStatus } from '@/lib/env';
 import { EmptyState, PageHeader, timeAgo } from '@/components/ui';
 import { ComissoesFiltros } from '@/components/comissoes-filtros';
 import { ProdutoCard } from '@/components/comissoes-produto';
+import { AddProdutoForm } from '@/components/add-produto-form';
 
 export const dynamic = 'force-dynamic';
 
@@ -198,12 +199,14 @@ export default async function ComissoesPage({ searchParams }: { searchParams: Se
           Produtos
         </h2>
 
+        <AddProdutoForm />
+
         <ComissoesFiltros categories={categorias} />
 
         {produtos.length === 0 ? (
           <EmptyState
             title="Nenhum produto ainda"
-            description="Importe o catalogo da Amazon pelos seus termos de busca, ou traga seus produtos da Hotmart."
+            description="Cadastre na mao o que voce escolheu na Hotmart, ou importe o catalogo da Amazon pelos seus termos de busca."
             href="/comissoes/importar"
             cta="Ir para Importar"
           />

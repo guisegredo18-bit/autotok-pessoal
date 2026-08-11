@@ -52,6 +52,15 @@ export type ImportResult = {
   inserted: number;
   updated: number;
   warnings: string[];
+  /**
+   * A importacao nem chegou a rodar — falta configuracao.
+   *
+   * Distingue "rodou e nao achou nada" (normal: voce ainda nao vendeu, ou nao
+   * se afiliou a nada) de "nao dava para rodar" (a chave nao esta preenchida).
+   * Sem essa distincao, os dois saem em vermelho, e o vermelho que exige acao
+   * some no meio do que e apenas informacao.
+   */
+  blocked?: boolean;
 };
 
 export function emptyResult(): ImportResult {

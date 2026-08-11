@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { and, desc, eq, gte, inArray, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { affiliateProducts, commissions } from '@/lib/db/schema';
@@ -213,6 +214,7 @@ export async function importHotmartCommissions(days?: number): Promise<ImportRes
     result.warnings.push(
       'Hotmart nao configurada. Preencha Client ID e Client Secret em Configuracoes > Chaves.',
     );
+    result.blocked = true;
     return result;
   }
 
@@ -253,6 +255,7 @@ export async function importHotmartProducts(): Promise<ImportResult> {
   const result = emptyResult();
   if (!hotmartIsReady()) {
     result.warnings.push('Hotmart nao configurada.');
+    result.blocked = true;
     return result;
   }
 
@@ -278,6 +281,7 @@ export async function importAmazonCatalog(keywords?: string[]): Promise<ImportRe
     result.warnings.push(
       'Amazon nao configurada. Preencha Access Key, Secret Key e a tag de afiliado em Configuracoes.',
     );
+    result.blocked = true;
     return result;
   }
 
@@ -289,6 +293,7 @@ export async function importAmazonCatalog(keywords?: string[]): Promise<ImportRe
       'Nenhum termo de busca configurado. Adicione os assuntos que voce promove em ' +
         'Comissoes > Importar.',
     );
+    result.blocked = true;
     return result;
   }
 
@@ -371,6 +376,7 @@ export async function refreshOperatingProducts(): Promise<ImportResult> {
   }
   if (!amazonIsReady()) {
     result.warnings.push('Amazon nao configurada — nao da para atualizar as metricas.');
+    result.blocked = true;
     return result;
   }
 
@@ -387,6 +393,73 @@ export async function refreshOperatingProducts(): Promise<ImportResult> {
   const saved = await upsertProducts(items);
   saved.warnings.push(...result.warnings);
   return saved;
+}
+
+/**
+ * Produto cadastrado na mao.
+ *
+ * A chave externa e derivada do link, e nao aleatoria: cadastrar o mesmo
+ * produto duas vezes (o que acontece quando voce nao lembra se ja cadastrou)
+ * atualiza a linha em vez de criar uma cópia — e a cópia seria pior, porque as
+ * duas apareceriam na lista disputando o mesmo lugar.
+ *
+ * `score` fica em 50 de proposito. Zero o esconderia no fim da lista ordenada
+ * por nota, e nota alta seria mentira: a plataforma nao nos deu sinal nenhum
+ * sobre ele. Cinquenta e o unico valor honesto — "nao sei" no meio da escala.
+ */
+export async function saveManualProduct(input: {
+  source: 'amazon' | 'hotmart';
+  name: string;
+  url: string;
+  category: string | null;
+  imageUrl: string | null;
+  priceCents: number | null;
+  currency: string;
+  commissionRate: number | null;
+}): Promise<void> {
+  const now = new Date();
+  const externalId = `manual:${createHash('sha1').update(input.url).digest('hex').slice(0, 24)}`;
+
+  const commissionCents =
+    input.priceCents != null && input.commissionRate != null
+      ? Math.round((input.priceCents * input.commissionRate) / 100)
+      : null;
+
+  await db
+    .insert(affiliateProducts)
+    .values({
+      source: input.source,
+      externalId,
+      name: input.name,
+      category: input.category,
+      url: input.url,
+      imageUrl: input.imageUrl,
+      priceCents: input.priceCents,
+      currency: input.currency,
+      commissionRate: input.commissionRate,
+      commissionCents,
+      score: 50,
+      // Ja entra marcado: voce so cadastra na mao o que decidiu promover.
+      operating: true,
+      operatingSince: now,
+      history: [{ at: now.toISOString(), score: 50, priceCents: input.priceCents }],
+      firstSeenAt: now,
+      lastSeenAt: now,
+    })
+    .onConflictDoUpdate({
+      target: [affiliateProducts.source, affiliateProducts.externalId],
+      set: {
+        name: input.name,
+        category: input.category,
+        url: input.url,
+        imageUrl: input.imageUrl,
+        priceCents: input.priceCents,
+        currency: input.currency,
+        commissionRate: input.commissionRate,
+        commissionCents,
+        lastSeenAt: now,
+      },
+    });
 }
 
 /** Marca ou desmarca um produto como "estou promovendo isto". */
