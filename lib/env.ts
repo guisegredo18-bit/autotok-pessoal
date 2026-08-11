@@ -90,7 +90,11 @@ export const env = {
 
   pexelsApiKey: process.env.PEXELS_API_KEY ?? '',
 
-  ttsProvider: (process.env.TTS_PROVIDER as 'edge' | 'google' | 'elevenlabs') || 'edge',
+  ttsProvider:
+    (process.env.TTS_PROVIDER as 'edge' | 'google' | 'gemini' | 'elevenlabs') || 'edge',
+  /** Modelo e voz do Gemini TTS. Vazio usa o padrao do proprio modulo. */
+  geminiTtsModel: process.env.GEMINI_TTS_MODEL ?? '',
+  geminiTtsVoice: process.env.GEMINI_TTS_VOICE ?? '',
   ttsVoice: process.env.TTS_VOICE || 'pt-BR-ThalitaMultilingualNeural',
   /** Trocavel para apontar a um proxy — e para os testes. */
   googleTtsUrl: (

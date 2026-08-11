@@ -602,6 +602,22 @@ vieram) — é essa informação que permite corrigir o coletor.
 **Vídeo saiu com fundo liso** — falta `PEXELS_API_KEY`, ou o termo de busca da
 cena não encontrou nada. O aviso aparece no card do vídeo.
 
+**Vídeo saiu sem narração** — o Edge TTS e a voz do Google são endpoints não
+oficiais, e os dois recusam conexão de IP de servidor com alguma frequência. O
+render não morre mais por causa disso: entrega o vídeo legendado e mudo, com a
+duração que o roteiro pediu, e avisa no card. **O piloto automático não publica
+esse vídeo sozinho** — você assiste e decide.
+
+**A saída normal é o Gemini.** Ele entra sozinho na terceira tentativa, com a
+mesma chave que já escreve os roteiros — é uma API pública de verdade, então
+responde igual de qualquer IP. Se você tem `GEMINI_API_KEY` preenchida, não
+precisa fazer nada: quando os dois gratuitos caírem, a voz sai por ele.
+
+Em **Configurações → Chaves → Narração dos vídeos** dá para forçar o provedor,
+escolher a voz do Gemini (Kore, Puck, Charon, Aoede, Leda…) ou pôr a ElevenLabs
+(paga por caractere). Renderizar fora da Vercel — Colab ou GitHub Actions —
+também costuma devolver o Edge TTS, porque o IP muda.
+
 **"ffmpeg não encontrado"** — o processo que renderiza não tem ffmpeg. Rodando
 local, instale-o. Se aparecer com **Onde renderizar: aqui mesmo**, é porque o
 painel está na Vercel, que não tem ffmpeg — essa opção só serve para o painel

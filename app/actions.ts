@@ -192,14 +192,22 @@ export async function generateIdeasAction(
     }
 
     /**
-     * Com o piloto ligado, gerar ideias ja e gravar video.
+     * Com o piloto ligado, as melhores ideias ja entram na fila — mas nenhuma
+     * renderiza aqui dentro.
      *
-     * So o primeiro renderiza dentro desta requisicao: um render leva de um a
-     * dois minutos e o teto da funcao na Vercel e de cinco. Os demais ficam na
-     * fila e saem no proximo cron — que e o preco honesto de nao ter servidor
-     * proprio, e continua sendo automatico do seu lado.
+     * A primeira versao renderizava uma, e o resultado na tela foi este: o
+     * botao "Gerar ideias" ficava dois minutos dizendo "Escrevendo
+     * roteiros...", indistinguivel de travado, e as vezes a funcao morria de
+     * tempo antes de responder — o que derruba a tela inteira com um erro de
+     * cliente, sem dizer o que houve.
+     *
+     * Nao vale a pena. Escrever roteiro leva quinze segundos e gravar video
+     * leva dois minutos: sao operacoes de escalas diferentes, e juntar as duas
+     * no mesmo toque faz a rapida herdar o risco da lenta. Quem tocou aqui
+     * pediu ideias; o video sai pelo cron, pelo botao do piloto ou pelo
+     * "Gravar video" de cada ideia — todos lugares onde a espera esta anunciada.
      */
-    const auto = await autoApproveIdeas({ inlineLimit: 1 });
+    const auto = await autoApproveIdeas({ inlineLimit: 0 });
 
     revalidatePath('/fila');
 
@@ -211,7 +219,7 @@ export async function generateIdeasAction(
       ok: true,
       message:
         auto.videoIds.length > 0
-          ? `${base} O piloto automatico ja mandou ${auto.videoIds.length} para virar video.`
+          ? `${base} O piloto pegou ${auto.videoIds.length} e mandou para a Fila.`
           : `${base} Veja abaixo.`,
     };
   } catch (err) {
@@ -533,7 +541,8 @@ export async function setupGithubSecretsAction(): Promise<ActionState> {
       return {
         ok: false,
         message:
-          'Preencha o token e o repositorio do GitHub em Chaves (logo abaixo) antes deste passo.',
+          'Falta o token do GitHub. Va em Configuracoes > Chaves > Renderizacao no GitHub ' +
+          'Actions, preencha o token e o repositorio, salve, e toque aqui de novo.',
       };
     }
     if (!env.databaseUrl || !env.authSecret) {

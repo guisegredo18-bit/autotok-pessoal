@@ -95,6 +95,21 @@ export default async function QueuePage() {
   const esperandoColab =
     renderEngine === 'manual' && rows.some((v) => v.status === 'queued');
 
+  /**
+   * Video na fila que nenhum processo pegou.
+   *
+   * O piloto automatico enfileira sem renderizar — gravar leva minutos e nao
+   * cabe dentro do toque que gerou as ideias. Sem esta checagem a tela diria
+   * "Renderizando…" sobre um video que ninguem comecou, que e exatamente o que
+   * ja fez a fila parecer quebrada uma vez. O registro de execucao responde
+   * isso sem adivinhacao: sem job rodando para este id, ninguem comecou.
+   *
+   * Com o motor `github` o trabalho vive fora daqui e tem aviso proprio, entao
+   * a pergunta nao se aplica.
+   */
+  const naoComecou = (id: string, status: string) =>
+    renderEngine !== 'github' && status === 'queued' && !progresso.has(id);
+
   // So consulta o GitHub quando ha algo esperando por ele: numa fila parada,
   // ou com outro motor escolhido, a chamada seria puro atraso na abertura.
   const github = working && renderEngine === 'github' ? await githubQueue() : null;
@@ -222,10 +237,12 @@ export default async function QueuePage() {
                     ? 'Renderizacao falhou'
                     : esperandoColab && video.status === 'queued'
                       ? 'Esperando voce abrir o Colab'
-                      : morto(video.id, video.status)
-                        ? interrompido(video.id)
-                        : (progresso.get(video.id)?.step ??
-                          'Renderizando… atualize em alguns minutos')}
+                      : naoComecou(video.id, video.status)
+                        ? 'Na fila — ninguem comecou a gravar ainda'
+                        : morto(video.id, video.status)
+                          ? interrompido(video.id)
+                          : (progresso.get(video.id)?.step ??
+                            'Renderizando… atualize em alguns minutos')}
                 </div>
               )}
 
@@ -237,9 +254,25 @@ export default async function QueuePage() {
                 </p>
               )}
 
+              {/* Video pronto com aviso nao e video quebrado: pintar os dois de
+                  vermelho faz o aviso que pede acao se perder no meio do que
+                  so informa. */}
               {video.error && (
-                <p className="mt-2 rounded-lg bg-red-950/40 p-2.5 text-[12px] leading-snug text-red-300">
+                <p
+                  className={`mt-2 rounded-lg p-2.5 text-[12px] leading-snug ${
+                    video.status === 'ready'
+                      ? 'bg-amber-950/40 text-amber-200'
+                      : 'bg-red-950/40 text-red-300'
+                  }`}
+                >
                   {video.error}
+                </p>
+              )}
+
+              {video.needsReview && video.status === 'ready' && (
+                <p className="mt-2 text-[12px] leading-snug text-muted">
+                  O piloto automatico nao publica este video sozinho — assista e
+                  decida voce.
                 </p>
               )}
 
@@ -294,9 +327,14 @@ export default async function QueuePage() {
                     action={retryVideoAction.bind(null, video.id)}
                     className="btn-ghost"
                   >
-                    {video.status === 'queued'
-                      ? 'Reenviar para renderizacao'
-                      : 'Tentar renderizar de novo'}
+                    {/* "Reenviar" mente sobre o que nunca foi enviado: o video
+                        que o piloto deixou na fila espera alguem que grave, e
+                        e este botao. */}
+                    {naoComecou(video.id, video.status)
+                      ? 'Gravar agora'
+                      : video.status === 'queued'
+                        ? 'Reenviar para renderizacao'
+                        : 'Tentar renderizar de novo'}
                   </ActionButton>
                 )}
 

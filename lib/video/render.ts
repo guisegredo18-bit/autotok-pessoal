@@ -49,6 +49,15 @@ export type RenderResult = {
 };
 
 /**
+ * Comeco do aviso de video mudo.
+ *
+ * E texto e marca ao mesmo tempo: a pessoa le a frase no card, e o pipeline
+ * reconhece o prefixo para nao deixar o piloto publicar sozinho um video sem
+ * voz. Mudar esta constante muda os dois lados juntos, que e o ponto.
+ */
+export const SEM_NARRACAO = 'O video saiu sem narracao';
+
+/**
  * De onde vem a narracao e a midia de fundo.
  *
  * Injetavel para que o pipeline possa ser exercitado de verdade num teste —
@@ -104,16 +113,31 @@ export async function renderVideo(
      * lento.
      */
     onProgress?.(`Preparando ${scenes.length} cenas (narracao e imagens)`);
+    const mudas: string[] = [];
     const resultados = await Promise.allSettled(
       scenes.map(async (scene, i) => {
         const narrationFile = `narration_${i}.mp3`;
-        const { audio } = await deps.synthesize(scene.text);
-        await fs.writeFile(path.join(dir, narrationFile), audio);
+        const semVoz = await narrate(dir, narrationFile, scene, deps);
+        if (semVoz) mudas.push(semVoz);
 
         const background = await prepareBackground(dir, i, scene, warnings, deps);
         return { scene, i, narrationFile, background };
       }),
     );
+
+    /**
+     * Um aviso so, mesmo com cinco cenas mudas.
+     *
+     * Quando a narracao cai, ela cai para todas — e o mesmo motivo repetido
+     * cinco vezes no card empurra para fora da tela os avisos que sao
+     * diferentes entre si.
+     */
+    if (mudas.length > 0) {
+      warnings.push(
+        `${SEM_NARRACAO} (${mudas.length}/${scenes.length} cena(s)): ${mudas[0]}. ` +
+          'A legenda continua no tempo certo — assista antes de publicar.',
+      );
+    }
 
     // Uma cena que falhou nao pode levar as outras junto: quatro cenas boas
     // valem muito mais que nenhuma, e a narracao e o servico mais instavel de
@@ -192,6 +216,61 @@ export async function renderVideo(
   } finally {
     await fs.rm(dir, { recursive: true, force: true }).catch(() => {});
   }
+}
+
+/**
+ * Grava a narracao da cena — e, quando nao consegue, uma faixa muda do tamanho
+ * que o roteiro pediu.
+ *
+ * A narracao e o unico servico da cadeia que nao tem substituto proprio: o
+ * Edge TTS e a voz do Google sao endpoints nao oficiais, e os dois recusam
+ * conexao de IP de servidor com alguma frequencia. Ate aqui isso derrubava o
+ * render inteiro — nenhuma cena preparada, nenhum arquivo gravado, nada para
+ * assistir — e a pessoa via "renderizando" virar "falhou" sem nunca ter um
+ * video na mao.
+ *
+ * Silencio no lugar de nada segue a mesma regra que o fundo liso ja seguia
+ * quando falta o Pexels: entregar o que da para entregar, dizendo o que faltou.
+ * Um video legendado sem voz e pobre, mas e um video — da para assistir,
+ * julgar e decidir. E o `SEM_NARRACAO` impede que ele seja publicado sozinho.
+ *
+ * Devolve `null` quando narrou de verdade, ou o motivo da falha.
+ */
+async function narrate(
+  dir: string,
+  file: string,
+  scene: Scene,
+  deps: RenderDeps,
+): Promise<string | null> {
+  try {
+    const { audio } = await deps.synthesize(scene.text);
+    await fs.writeFile(path.join(dir, file), audio);
+    return null;
+  } catch (err) {
+    const motivo = err instanceof Error ? err.message : String(err);
+    await ffmpeg(
+      [
+        '-y', '-f', 'lavfi', '-i', 'anullsrc=r=44100:cl=mono',
+        '-t', String(silentSeconds(scene)),
+        '-c:a', 'libmp3lame', file,
+      ],
+      dir,
+    );
+    return motivo.slice(0, 200);
+  }
+}
+
+/**
+ * Quanto tempo a cena muda deve durar.
+ *
+ * O roteiro ja diz quantos segundos aquela cena vale, e essa e a melhor
+ * resposta — foi ela que a IA usou para dosar o texto. Sem um numero util,
+ * estimamos pela leitura: cerca de 14 caracteres por segundo em portugues
+ * falado, com um piso para a legenda nao piscar.
+ */
+function silentSeconds(scene: Scene): number {
+  if (scene.seconds > 0) return Math.min(scene.seconds, 60);
+  return Math.max(2, Math.min(60, Math.round(scene.text.length / 14)));
 }
 
 /**
