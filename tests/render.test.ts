@@ -308,3 +308,68 @@ describe('renderVideo sem narracao', () => {
     assert.match(info, /Audio: aac/, 'o video mudo saiu sem faixa de audio');
   });
 });
+
+describe('legenda dentro do quadro', () => {
+  test('texto longo nao encosta nas bordas', async () => {
+    /**
+     * Um video renderizado de verdade saiu com "AUTOMATICO ESCOLHENDO POR"
+     * cortado nos dois lados. Duas causas somadas: o bloco era montado por
+     * numero de palavras sem olhar a largura, e o cabecalho ASS pedia
+     * `WrapStyle: 2`, que manda nunca quebrar linha.
+     *
+     * Contar pixel claro nas colunas da borda e o que separa "a legenda existe"
+     * de "a legenda cabe" — o teste anterior passava com o texto vazando.
+     */
+    const resultado = await renderVideo(
+      [
+        {
+          text: 'O problema nao e a camera e sim o modo automatico escolhendo por voce',
+          visual: 'fundo',
+          seconds: 6,
+        },
+      ] as any,
+      undefined,
+      // Fundo preto: qualquer pixel claro so pode ser letra.
+      { ...deps, findAsset: async () => null },
+    );
+
+    const file = path.join(dir, 'borda.mp4');
+    await fs.writeFile(file, resultado.video);
+
+    const largura = 720; // perfil da Vercel, definido no before()
+    const altura = 1280;
+    const margem = 20; // colunas de cada lado que precisam ficar limpas
+
+    /**
+     * Varre o video inteiro de 0,2 em 0,2 segundo.
+     *
+     * A primeira versao deste teste amostrava segundos fixos (1 a 5) e passava
+     * com o bug presente: a narracao injetada dura 2s, entao o video inteiro
+     * tem 2,35s e as amostras de 3, 4 e 5 caiam fora dele. Um teste que olha
+     * onde o defeito nao esta da a mesma resposta que um teste que nao existe.
+     */
+    const passo = 0.2;
+    for (let segundo = 0.1; segundo < resultado.durationSeconds; segundo += passo) {
+      const { stdout } = await exec(
+        ffmpegBin,
+        ['-v', 'error', '-ss', segundo.toFixed(2), '-i', file, '-frames:v', '1',
+         '-f', 'rawvideo', '-pix_fmt', 'gray', '-'],
+        { encoding: 'buffer', maxBuffer: 64 * 1024 * 1024 } as any,
+      );
+      const pixels = stdout as unknown as Buffer;
+      if (pixels.length < largura * altura) continue;
+
+      for (let y = 0; y < altura; y++) {
+        for (let x = 0; x < margem; x++) {
+          const esquerda = pixels[y * largura + x];
+          const direita = pixels[y * largura + (largura - 1 - x)];
+          assert.ok(
+            esquerda < 200 && direita < 200,
+            `legenda vazando em ${segundo.toFixed(1)}s, linha ${y}: ` +
+              `esquerda=${esquerda} direita=${direita}`,
+          );
+        }
+      }
+    }
+  });
+});
