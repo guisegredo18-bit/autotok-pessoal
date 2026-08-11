@@ -266,7 +266,24 @@ export type Video = typeof videos.$inferSelect;
 export type NewVideo = typeof videos.$inferInsert;
 export type Account = typeof accounts.$inferSelect;
 export type Job = typeof jobs.$inferSelect;
-export type Scene = { text: string; visual: string; seconds: number };
+/**
+ * Uma cena do roteiro.
+ *
+ * `visual` e um termo de busca em ingles para o banco de imagens. `imageUrl`,
+ * quando presente, e uma imagem exata que vence a busca — e como o video de um
+ * produto mostra o produto de verdade, e nao uma foto generica de banco.
+ *
+ * Alem de ficar melhor, sai muito mais barato de renderizar: a foto do produto
+ * tem alguns kilobytes, enquanto o clipe de video que o Pexels devolve pode
+ * passar de dezenas de megabytes por cena — e baixar isso e o que fazia o
+ * render estourar o tempo da funcao.
+ */
+export type Scene = {
+  text: string;
+  visual: string;
+  seconds: number;
+  imageUrl?: string | null;
+};
 export type AffiliateProduct = typeof affiliateProducts.$inferSelect;
 export type NewAffiliateProduct = typeof affiliateProducts.$inferInsert;
 export type Commission = typeof commissions.$inferSelect;

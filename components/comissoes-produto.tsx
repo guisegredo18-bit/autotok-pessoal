@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useTransition } from 'react';
-import { toggleOperatingAction } from '@/app/actions-comissoes';
+import { gerarVideoDoProdutoAction, toggleOperatingAction } from '@/app/actions-comissoes';
+import { ActionButton } from '@/components/action-button';
 import { formatMoney } from '@/lib/money';
 import type { AffiliateProduct } from '@/lib/db/schema';
 
@@ -139,6 +140,18 @@ export function ProdutoCard({ product }: { product: AffiliateProduct }) {
             Abrir
           </a>
         )}
+      </div>
+
+      {/* O roteiro sai deste produto: nome, preco e a foto dele nas cenas.
+          Fica embaixo do botao de operacao porque a ordem de uso e essa —
+          voce escolhe o que vai promover, depois grava sobre ele. */}
+      <div className="mt-2">
+        <ActionButton
+          action={gerarVideoDoProdutoAction.bind(null, product.id)}
+          className="btn-ghost text-[13px]"
+        >
+          Gerar video deste produto
+        </ActionButton>
       </div>
 
       {error && <p className="mt-2 text-[12px] text-red-400">{error}</p>}

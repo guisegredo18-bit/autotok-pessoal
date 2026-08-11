@@ -45,6 +45,25 @@ export function SettingsForm({ settings }: { settings: AppSettings }) {
         </select>
       </div>
 
+      <div>
+        <label className="label" htmlFor="language">
+          Publico do canal
+        </label>
+        <select
+          id="language"
+          name="language"
+          className="field"
+          defaultValue={settings.language}
+        >
+          <option value="pt-BR">Brasil — roteiro e narracao em portugues</option>
+          <option value="en-US">Estados Unidos — roteiro e narracao em ingles</option>
+        </select>
+        <p className="mt-1 text-[11px] leading-snug text-muted">
+          Muda o idioma do roteiro E a voz da narracao. Vender em dolar sem trocar isto
+          nao funciona: o publico americano nao entende o video.
+        </p>
+      </div>
+
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label className="label" htmlFor="country">

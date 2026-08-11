@@ -1,4 +1,5 @@
 import type { AppSettings } from '@/lib/db/settings';
+import { market } from './mercado';
 
 /**
  * Templates de video.
@@ -57,10 +58,24 @@ ESTRUTURA OBRIGATORIA (video viral):
   },
 };
 
-/** Regras que valem para qualquer template. */
-export const COMMON_RULES = `
+/**
+ * Regras que valem para qualquer template.
+ *
+ * A regra de idioma sai do mercado configurado, e nao fica escrita aqui: era
+ * justamente ela que prendia o projeto ao Brasil enquanto a tela oferecia um
+ * campo de idioma que nao surtia efeito nenhum.
+ */
+export function commonRules(marketCode: unknown): string {
+  const alvo = market(marketCode);
+  return COMMON_RULES.replace('{{IDIOMA}}', alvo.writingRule).replace(
+    '{{LEGENDA_IDIOMA}}',
+    alvo.captionRule,
+  );
+}
+
+const COMMON_RULES = `
 REGRAS DE ESCRITA:
-- Portugues do Brasil, informal, como uma pessoa falando com um amigo.
+{{IDIOMA}}
 - Frases curtas. Cada cena e uma ou duas frases no maximo.
 - Nada de introducao tipo "ola pessoal" ou "hoje eu vou falar sobre". Va direto.
 - Nada de emoji no texto narrado (ele vai ser lido em voz alta).
@@ -73,12 +88,31 @@ CAMPO "visual" DE CADA CENA:
 - 2 a 5 palavras. Sem nomes de marca (nao existe no banco de imagens).
 
 LEGENDA E HASHTAGS:
+{{LEGENDA_IDIOMA}}
 - A legenda tem no maximo 150 caracteres e complementa o video, nao repete o roteiro.
 - 4 a 6 hashtags, misturando uma de alto volume, duas do nicho e uma da tendencia usada.
 - Escreva as hashtags sem o simbolo #, apenas a palavra.
 `.trim();
 
 /** Monta o bloco de contexto do usuario para o prompt. */
+/**
+ * O produto que o video vai promover, quando houver um.
+ *
+ * Existe para que o roteiro pare de falar de uma categoria e passe a falar de
+ * uma coisa: "essa air fryer de 4 litros por R$ 349" prende mais que "air
+ * fryers". Os campos sao os que a Amazon e a Hotmart de fato entregam — nada
+ * aqui e inventado para o prompt.
+ */
+export type ProductContext = {
+  name: string;
+  source: 'amazon' | 'hotmart';
+  category?: string | null;
+  /** Preco ja formatado na moeda de origem, ex: "R$ 349,90". */
+  price?: string | null;
+  /** Percentual de comissao, so para a IA saber que vale insistir. */
+  commissionRate?: number | null;
+};
+
 export function contextBlock(settings: AppSettings, trendName?: string, trendKind?: string): string {
   const lines = [
     `NICHO DO CANAL: ${settings.niche}`,
@@ -94,5 +128,55 @@ export function contextBlock(settings: AppSettings, trendName?: string, trendKin
   if (settings.blockedWords.length > 0) {
     lines.push(`PALAVRAS PROIBIDAS (nunca use): ${settings.blockedWords.join(', ')}`);
   }
+  return lines.join('\n');
+}
+
+/**
+ * Instrucoes para um video de um produto especifico.
+ *
+ * Duas regras aqui existem para nao criar problema com as plataformas nem com
+ * quem assiste:
+ *
+ * O preco entra como referencia, e o roteiro precisa dizer que ele muda. Preco
+ * de Amazon oscila todo dia, e um video afirmando "custa R$ 349" continua no ar
+ * semanas depois valendo outro numero — isso queima a confianca de quem clica.
+ *
+ * A IA nao pode inventar caracteristica que nao esta aqui. Ela so recebeu nome,
+ * categoria e preco; qualquer especificacao alem disso seria chute apresentado
+ * como fato sobre um produto de verdade, com o seu link embaixo.
+ */
+export function productBlock(product: ProductContext): string {
+  const loja = product.source === 'amazon' ? 'Amazon' : 'Hotmart';
+  const lines = [
+    '',
+    `PRODUTO A PROMOVER (dado real, vindo da ${loja}):`,
+    `- Nome: ${product.name}`,
+  ];
+
+  if (product.category) lines.push(`- Categoria: ${product.category}`);
+  if (product.price) lines.push(`- Preco de referencia: ${product.price}`);
+
+  lines.push(
+    '',
+    'REGRAS DESTE VIDEO:',
+    '- Fale DESTE produto, pelo nome, nao da categoria em geral.',
+    '- Nao invente caracteristica, medida, material ou especificacao que nao esteja acima.',
+    '  Voce so sabe o que esta escrito aqui; o resto seria chute sobre um produto real.',
+  );
+
+  if (product.price) {
+    lines.push(
+      '- Se citar o preco, diga que ele pode mudar (ex: "estava por X quando gravei").',
+      '  O video fica no ar por semanas e o preco muda; afirmar um valor fixo queima confianca.',
+    );
+  }
+
+  lines.push(
+    product.source === 'hotmart'
+      ? '- E um produto digital (curso, ebook, assinatura). Fale do resultado que ele entrega, nao de entrega fisica.'
+      : '- E um produto fisico. Fale de uso no dia a dia, nao de especificacao tecnica.',
+    '- O CTA final deve mandar para o link da bio, sem prometer desconto que voce nao controla.',
+  );
+
   return lines.join('\n');
 }

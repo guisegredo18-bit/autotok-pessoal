@@ -91,15 +91,29 @@ export function ComissoesFiltros({ categories }: { categories: string[] }) {
         </select>
       )}
 
-      <label className="flex items-center gap-2 text-[14px]">
-        <input
-          type="checkbox"
-          checked={operating}
-          onChange={(event) => set('operando', event.target.checked ? '1' : '')}
-          className="h-5 w-5 rounded border-line bg-panel2 accent-[#6366f1]"
-        />
-        So os que estou operando
-      </label>
+      <div className="flex flex-col gap-2">
+        {/* Isolar o que paga em dolar e o filtro que decide o que promover
+            quando o publico do canal e americano. */}
+        <label className="flex items-center gap-2 text-[14px]">
+          <input
+            type="checkbox"
+            checked={params.get('moeda') === 'USD'}
+            onChange={(event) => set('moeda', event.target.checked ? 'USD' : '')}
+            className="h-5 w-5 rounded border-line bg-panel2 accent-emerald-500"
+          />
+          So os que pagam em dolar
+        </label>
+
+        <label className="flex items-center gap-2 text-[14px]">
+          <input
+            type="checkbox"
+            checked={operating}
+            onChange={(event) => set('operando', event.target.checked ? '1' : '')}
+            className="h-5 w-5 rounded border-line bg-panel2 accent-emerald-500"
+          />
+          So os que estou operando
+        </label>
+      </div>
     </div>
   );
 }
