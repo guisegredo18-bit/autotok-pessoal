@@ -541,7 +541,8 @@ export async function setupGithubSecretsAction(): Promise<ActionState> {
       return {
         ok: false,
         message:
-          'Preencha o token e o repositorio do GitHub em Chaves (logo abaixo) antes deste passo.',
+          'Falta o token do GitHub. Va em Configuracoes > Chaves > Renderizacao no GitHub ' +
+          'Actions, preencha o token e o repositorio, salve, e toque aqui de novo.',
       };
     }
     if (!env.databaseUrl || !env.authSecret) {

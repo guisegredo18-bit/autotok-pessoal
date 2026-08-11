@@ -6,9 +6,15 @@ import { getSettings } from '@/lib/db/settings';
 import { autopilotBlockers, describeAutopilot } from '@/lib/pipeline/autopilot';
 import { integrationStatus } from '@/lib/env';
 import { getAccount } from '@/lib/tiktok/account';
+import { runnerCantReadKeys } from '@/lib/github/repo';
+import { secretsStatus } from '@/lib/secrets';
 import { ActionButton } from '@/components/action-button';
 import { PageHeader, StatusPill, compact, timeAgo } from '@/components/ui';
-import { generateFromTrendsAction, runAutopilotAction } from '@/app/actions';
+import {
+  generateFromTrendsAction,
+  runAutopilotAction,
+  setupGithubSecretsAction,
+} from '@/app/actions';
 import { runningCommit } from '@/lib/version';
 
 export const dynamic = 'force-dynamic';
@@ -53,6 +59,14 @@ export default async function Dashboard() {
       .orderBy(sql`${videos.publishedAt} desc`)
       .limit(1),
   ]);
+
+  /**
+   * O painel le as proprias chaves; o runner do Actions le as mesmas linhas com
+   * outro `AUTH_SECRET` e nao decifra nada. Comparar as duas leituras e o que
+   * transforma "falta chave" (errado) em "o segredo nao bate" (certo).
+   */
+  const chaves = await secretsStatus().catch(() => ({}) as Record<string, boolean>);
+  const chavesIlegiveis = runnerCantReadKeys(runs, (nome) => Boolean(chaves[nome as never]));
 
   const blockers = autopilotBlockers({
     settings,
@@ -122,6 +136,26 @@ export default async function Dashboard() {
           <div className="mt-3 border-t border-line pt-3">
             <ActionButton action={runAutopilotAction}>Rodar o piloto agora</ActionButton>
           </div>
+        </div>
+      )}
+
+      {/* O sintoma engana: o painel funciona, o robô do GitHub falha dizendo
+          que falta chave, e a conclusão natural — errada — é que alguém
+          esqueceu de preencher. Dizer o que é, e resolver no mesmo cartão, é o
+          que evita uma caçada de dias. */}
+      {chavesIlegiveis && (
+        <div className="card mb-4 border-amber-900/60 bg-amber-950/30">
+          <p className="text-[14px] font-semibold text-amber-300">
+            O robo do GitHub nao consegue ler suas chaves
+          </p>
+          <p className="mt-1 text-[13px] leading-snug text-amber-200/80">
+            Suas chaves estao certas aqui no painel — o que nao bate e o segredo que as
+            decifra do outro lado. Enquanto isso, o piloto automatico so anda quando voce
+            abre o app. Um toque resolve.
+          </p>
+          <ActionButton action={setupGithubSecretsAction} className="btn-primary mt-3">
+            Consertar agora
+          </ActionButton>
         </div>
       )}
 

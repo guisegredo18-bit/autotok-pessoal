@@ -169,3 +169,37 @@ export async function listRecentRuns(limit = 5): Promise<WorkflowRun[]> {
     url: String(r?.html_url ?? ''),
   }));
 }
+
+/**
+ * O robo do GitHub nao consegue ler as chaves que o painel le.
+ *
+ * As chaves ficam cifradas no banco com o `AUTH_SECRET`. O painel e o runner
+ * do Actions leem a mesma linha, entao um `AUTH_SECRET` diferente nos dois
+ * lados produz um sintoma que engana: o painel funciona, o runner falha
+ * dizendo "Configuracao faltando", e a conclusao natural — errada — e que
+ * alguem esqueceu de preencher a chave.
+ *
+ * O diagnostico e uma comparacao, e por isso mora aqui como funcao pura: se a
+ * execucao reclamou de uma chave que o painel tem, o problema nao e a chave.
+ * E o segredo que decifra.
+ */
+export function runnerCantReadKeys(
+  jobs: { status: string; message: string | null }[],
+  panelHasKey: (name: string) => boolean,
+): boolean {
+  return jobs.some((job) => {
+    if (job.status !== 'failed') return false;
+
+    const faltando = /Configuracao faltando:\s*([^.]+)\./i.exec(job.message ?? '');
+    if (!faltando) return false;
+
+    const nomes = faltando[1]
+      .split(',')
+      .map((n) => n.trim())
+      .filter(Boolean);
+
+    // Se o painel tambem nao tem alguma delas, a explicacao simples basta:
+    // falta preencher. So acusamos o AUTH_SECRET quando nao ha o que preencher.
+    return nomes.length > 0 && nomes.every((nome) => panelHasKey(nome));
+  });
+}

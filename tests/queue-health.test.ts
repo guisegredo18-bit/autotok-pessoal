@@ -1,6 +1,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { queueHealth, type WorkflowRun } from '@/lib/github/repo';
+import * as repo from '@/lib/github/repo';
 
 /**
  * Franquia de minutos esgotada nao gera erro: o job fica em "queued"
@@ -57,5 +58,53 @@ describe('queueHealth', () => {
     const health = queueHealth([run('queued', 1), run('queued', 30)]);
     assert.equal(health.oldestMinutes, 30);
     assert.equal(health.stuck, true);
+  });
+});
+
+describe('runnerCantReadKeys', () => {
+  /**
+   * O sintoma engana: o painel funciona, o runner do Actions falha dizendo que
+   * falta chave, e a conclusao natural — errada — e que alguem esqueceu de
+   * preencher. A causa real e o `AUTH_SECRET` diferente nos dois lados, que
+   * impede o runner de decifrar as chaves que estao la.
+   */
+  const tem = (nomes: string[]) => (nome: string) => nomes.includes(nome);
+
+  const falhaDeChave = (msg: string) => ({ status: 'failed', message: msg });
+
+  test('chave que o painel tem e o runner nao le acusa o segredo', () => {
+    const jobs = [
+      falhaDeChave(
+        'Configuracao faltando: geminiApiKey. Preencha em Configuracoes > Chaves no painel.',
+      ),
+    ];
+    assert.equal(repo.runnerCantReadKeys(jobs, tem(['geminiApiKey'])), true);
+  });
+
+  test('chave que o painel tambem nao tem e so falta preencher', () => {
+    // Acusar o AUTH_SECRET aqui mandaria a pessoa mexer no GitHub quando o
+    // conserto e digitar a chave — o tipo de pista errada que custa dias.
+    const jobs = [falhaDeChave('Configuracao faltando: pexelsApiKey.')];
+    assert.equal(repo.runnerCantReadKeys(jobs, tem(['geminiApiKey'])), false);
+  });
+
+  test('varias chaves: basta uma faltar no painel para nao acusar', () => {
+    const jobs = [falhaDeChave('Configuracao faltando: geminiApiKey, pexelsApiKey.')];
+    assert.equal(repo.runnerCantReadKeys(jobs, tem(['geminiApiKey'])), false);
+    assert.equal(repo.runnerCantReadKeys(jobs, tem(['geminiApiKey', 'pexelsApiKey'])), true);
+  });
+
+  test('job que deu certo nao acusa nada', () => {
+    const jobs = [{ status: 'done', message: 'ok' }];
+    assert.equal(repo.runnerCantReadKeys(jobs, tem(['geminiApiKey'])), false);
+  });
+
+  test('falha por outro motivo nao vira diagnostico de segredo', () => {
+    const jobs = [falhaDeChave('O modelo nao devolveu um roteiro valido em duas tentativas.')];
+    assert.equal(repo.runnerCantReadKeys(jobs, () => true), false);
+  });
+
+  test('lista vazia nao acusa', () => {
+    assert.equal(repo.runnerCantReadKeys([], () => true), false);
   });
 });
