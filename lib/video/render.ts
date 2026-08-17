@@ -281,13 +281,28 @@ async function renderScene(opts: {
   let videoFilter: string;
 
   if (background.kind === 'image') {
-    // Um ciclo completo de zoom (Ken Burns) ocupa exatamente a cena.
     const frames = Math.max(1, Math.round(duration * FPS));
+
+    /**
+     * Ken Burns dimensionado pela duracao da cena.
+     *
+     * O passo era fixo em 0.0006 por quadro com teto de 1.12: a 30fps o zoom
+     * chegava ao limite em 6,7 segundos e congelava. Como cena com narracao
+     * costuma passar disso, a maior parte do tempo era imagem parada de fato —
+     * e o video inteiro passava a impressao de ser um slide, nao um video.
+     *
+     * Derivando o passo da duracao, o movimento cobre a cena toda, seja ela de
+     * tres ou de doze segundos.
+     */
+    const zoomMax = 1.18;
+    const passo = (zoomMax - 1) / frames;
+
     input.push('-loop', '1', '-i', background.file);
     videoFilter =
       `[0:v]scale=${ZOOM_WIDTH}:${ZOOM_HEIGHT}:force_original_aspect_ratio=increase,` +
       `crop=${ZOOM_WIDTH}:${ZOOM_HEIGHT},` +
-      `zoompan=z='min(zoom+0.0006,1.12)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':` +
+      `zoompan=z='min(zoom+${passo.toFixed(6)},${zoomMax})':` +
+      `x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':` +
       `d=${frames}:s=${WIDTH}x${HEIGHT}:fps=${FPS},${grade},setsar=1,${subtitles}[v]`;
   } else if (background.kind === 'video') {
     // -stream_loop -1 cobre clipes mais curtos que a narracao; o -t corta.
