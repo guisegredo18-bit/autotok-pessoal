@@ -40,11 +40,14 @@ export interface ReactionMetrics {
 }
 
 export function scoreReaction(m: ReactionMetrics): Scored {
-  if (m.validTrials < Math.ceil(m.trials * 0.5) || m.validTrials < 5) {
-    return invalid(0, 'Poucos toques validos para valer como medida.');
-  }
+  // A checagem de antecipacao vem primeiro porque e a mais especifica: quem
+  // chuta em tudo tambem fica sem toques validos, e a mensagem generica
+  // esconderia justamente o que a pessoa precisa corrigir.
   if (m.anticipations > m.trials * 0.3) {
     return invalid(0, 'Muitos toques antes do sinal — parece que foi no chute.');
+  }
+  if (m.validTrials < Math.ceil(m.trials * 0.5) || m.validTrials < 5) {
+    return invalid(0, 'Poucos toques válidos para valer como medida.');
   }
 
   const speed = linScore(m.medianRt, 650, 230);
@@ -110,8 +113,8 @@ export interface PairsMetrics {
 }
 
 export function scorePairs(m: PairsMetrics): Scored {
-  if (m.completed < m.pairs) return invalid(0, 'Jogo nao concluido.');
-  if (m.moves < m.pairs) return invalid(0, 'Numero de jogadas impossivel.');
+  if (m.completed < m.pairs) return invalid(0, 'Jogo não concluído.');
+  if (m.moves < m.pairs) return invalid(0, 'Número de jogadas impossível.');
 
   // Com memoria perfeita, achar N pares custa por volta de 1,6N jogadas: e o
   // preco de ter que descobrir cada carta pelo menos uma vez.
@@ -143,7 +146,7 @@ export function scoreStroop(m: StroopMetrics): Scored {
   if (accuracy < 0.5) {
     // Com quatro botoes, o acaso da 25%. Abaixo de 50% a pessoa provavelmente
     // nao entendeu a regra, e a nota mediria confusao, nao cognicao.
-    return invalid(accuracy * 100, 'Acertos abaixo do esperado — vale reler a instrucao e repetir.');
+    return invalid(accuracy * 100, 'Acertos abaixo do esperado — vale reler a instrução e repetir.');
   }
 
   // Efeito de interferencia: o quanto a palavra escrita atrapalha a leitura da
@@ -156,21 +159,42 @@ export function scoreStroop(m: StroopMetrics): Scored {
 }
 
 export interface TrailsMetrics {
-  /** Parte A: so numeros. Mede velocidade motora e visual. */
+  /** Parte A: so numeros. Mede velocidade motora e busca visual. */
   timeAMs: number;
   errorsA: number;
   /** Parte B: numero/letra alternados. A diferenca para A e o custo de alternar. */
   timeBMs: number;
   errorsB: number;
-  completedB: boolean;
+  /** 1 quando a parte B foi ate o fim. */
+  completedB: number;
+  /** Quantos alvos cada parte tinha. Usado so para checar plausibilidade. */
+  nodesA?: number;
+  nodesB?: number;
 }
 
-export function scoreTrails(m: TrailsMetrics): Scored {
-  if (!m.completedB) return invalid(0, 'Parte B nao concluida.');
-  if (m.timeAMs < 1000 || m.timeBMs < 1000) return invalid(0, 'Tempos implausiveis.');
+/** Nenhum dedo humano acerta um alvo a cada 250 ms por quinze alvos seguidos.
+ *  Abaixo disso o que houve foi toque fantasma, multitoque ou dado corrompido
+ *  — e um tempo desses, aceito, vira a melhor nota do historico. */
+const MIN_MS_PER_NODE = 250;
 
-  const speedA = linScore(m.timeAMs, 90000, 18000);
-  const speedB = linScore(m.timeBMs, 190000, 40000);
+/**
+ * As ancoras de tempo assumem o formato do app — 15 alvos na parte A e 16 na
+ * parte B — e nao os 25 do teste em papel. Um tempo daqui nao se compara com
+ * um tempo de consultorio.
+ */
+export function scoreTrails(m: TrailsMetrics): Scored {
+  if (!m.completedB) return invalid(0, 'Parte B não concluída.');
+
+  const floorA = (m.nodesA ?? 15) * MIN_MS_PER_NODE;
+  const floorB = (m.nodesB ?? 16) * MIN_MS_PER_NODE;
+  if (m.timeAMs < floorA || m.timeBMs < floorB) {
+    return invalid(0, 'Tempos rápidos demais para serem reais — vale refazer com calma.');
+  }
+
+  const speedA = linScore(m.timeAMs, 60000, 12000);
+  const speedB = linScore(m.timeBMs, 120000, 25000);
+  // A razao B/A isola o custo de alternar de regra: quem so ficou mais lento
+  // piora nas duas partes e mantem a razao, e a nota cai bem menos.
   const ratio = m.timeBMs / m.timeAMs;
   const shifting = linScore(ratio, 3.2, 1.2);
   const errorPenalty = (m.errorsA + m.errorsB) * 2.5;

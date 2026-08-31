@@ -640,3 +640,13 @@ consistentes) ou use um modelo maior no mesmo provedor.
 
 **Estourou o limite diário do provedor de IA** — troque `AI_PROVIDER` para outro
 gratuito; as chaves convivem no mesmo `.env`, é só mudar uma linha.
+
+---
+
+## Outros apps neste repositório
+
+- **[`apps/lucidez`](apps/lucidez/)** — Lucidez, um app separado de treino e acompanhamento
+  cognitivo diário: seis jogos curtos que viram uma linha do tempo de desempenho por domínio,
+  para acompanhar a evolução da cognição de quem convive com uma doença neurológica.
+  Projeto independente (Vite + React), com build e dependências próprios; não compartilha
+  nada com o pipeline do autotok. Veja o [README dele](apps/lucidez/README.md).

@@ -109,20 +109,38 @@ test('stroop: acerto perto do acaso invalida', () => {
 });
 
 test('trilhas: parte B inacabada invalida', () => {
-  const r = scoreTrails({ timeAMs: 30_000, errorsA: 0, timeBMs: 0, errorsB: 0, completedB: false });
+  const r = scoreTrails({ timeAMs: 30_000, errorsA: 0, timeBMs: 0, errorsB: 0, completedB: 0 });
   assert.equal(r.valid, false);
 });
 
+test('trilhas: tempo rapido demais para ser humano nao vira nota alta', () => {
+  // Quinze alvos em 1,7 s nao acontece com um dedo. Sem esse piso, um toque
+  // fantasma renderia a melhor nota que a pessoa ja teve.
+  const r = scoreTrails({
+    timeAMs: 1700, errorsA: 0, timeBMs: 2100, errorsB: 0, completedB: 1, nodesA: 15, nodesB: 16,
+  });
+  assert.equal(r.valid, false);
+  assert.match(r.invalidReason ?? '', /rápidos demais/);
+});
+
+test('trilhas: o piso acompanha o numero de alvos', () => {
+  // Com poucos alvos, um tempo curto continua plausivel.
+  const poucos = scoreTrails({
+    timeAMs: 2000, errorsA: 0, timeBMs: 2500, errorsB: 0, completedB: 1, nodesA: 6, nodesB: 8,
+  });
+  assert.equal(poucos.valid, true);
+});
+
 test('trilhas: custo de alternancia menor pontua mais', () => {
-  const fluido = scoreTrails({ timeAMs: 25_000, errorsA: 0, timeBMs: 38_000, errorsB: 0, completedB: true });
-  const travado = scoreTrails({ timeAMs: 25_000, errorsA: 0, timeBMs: 95_000, errorsB: 0, completedB: true });
+  const fluido = scoreTrails({ timeAMs: 25_000, errorsA: 0, timeBMs: 38_000, errorsB: 0, completedB: 1 });
+  const travado = scoreTrails({ timeAMs: 25_000, errorsA: 0, timeBMs: 95_000, errorsB: 0, completedB: 1 });
   assert.ok(fluido.score > travado.score);
   assert.ok(fluido.score > 70, `veio ${fluido.score}`);
 });
 
 test('trilhas: erros descontam da nota', () => {
-  const limpo = scoreTrails({ timeAMs: 25_000, errorsA: 0, timeBMs: 45_000, errorsB: 0, completedB: true });
-  const errado = scoreTrails({ timeAMs: 25_000, errorsA: 2, timeBMs: 45_000, errorsB: 3, completedB: true });
+  const limpo = scoreTrails({ timeAMs: 25_000, errorsA: 0, timeBMs: 45_000, errorsB: 0, completedB: 1 });
+  const errado = scoreTrails({ timeAMs: 25_000, errorsA: 2, timeBMs: 45_000, errorsB: 3, completedB: 1 });
   assert.ok(Math.abs(limpo.score - errado.score - 12.5) < 0.2, 'cinco erros valem 12,5 pontos');
 });
 
@@ -130,7 +148,7 @@ test('todas as notas ficam dentro de 0 a 100', () => {
   const extremos = [
     scoreReaction({ medianRt: 50, sdRt: 0, anticipations: 0, lapses: 0, validTrials: 20, trials: 20 }),
     scoreReaction({ medianRt: 5000, sdRt: 4000, anticipations: 0, lapses: 20, validTrials: 20, trials: 20 }),
-    scoreTrails({ timeAMs: 300_000, errorsA: 40, timeBMs: 600_000, errorsB: 40, completedB: true }),
+    scoreTrails({ timeAMs: 300_000, errorsA: 40, timeBMs: 600_000, errorsB: 40, completedB: 1 }),
     scorePairs({ pairs: 6, moves: 6, durationMs: 1000, completed: 6 }),
   ];
   for (const r of extremos) {

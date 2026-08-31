@@ -1,4 +1,5 @@
 import { DOMAIN_IDS, domainOf } from './domains.ts';
+import { num, plural } from './format.ts';
 import { clamp, linearRegression, mean, median, sd } from './stats.ts';
 import type { DayPoint, DomainId, Session, TestResult } from './types.ts';
 
@@ -198,7 +199,14 @@ export function analyzeDomain(points: DayPoint[], domain: DomainId): TrendVerdic
  * cada dominio para desvios da propria base e tiramos a media desses desvios,
  * o que deixa o indice imune a variacao de quais jogos entraram no dia.
  */
-export function analyzeOverall(points: DayPoint[]): TrendVerdict {
+/**
+ * Serie do indice geral, ja em pontos de 0 a 100.
+ *
+ * Cada dia vira a media dos z dos dominios medidos naquele dia, deslocada para
+ * uma escala legivel: 50 = exatamente a linha de base, e cada 10 pontos = um
+ * desvio padrao. Devolve vazio enquanto nenhum dominio tiver base suficiente.
+ */
+export function compositeSeries(points: DayPoint[]): SeriesPoint[] {
   const baselines = new Map<DomainId, Baseline>();
   for (const domain of DOMAIN_IDS) {
     const series = seriesFor(points, domain);
@@ -212,23 +220,8 @@ export function analyzeOverall(points: DayPoint[]): TrendVerdict {
       lastDate: series[MIN_BASELINE - 1]!.date,
     });
   }
+  if (baselines.size === 0) return [];
 
-  if (baselines.size === 0) {
-    const usable = points.filter((p) => p.overall !== null);
-    return {
-      status: usable.length === 0 ? 'sem_dados' : 'formando_base',
-      baseline: null,
-      recent: null,
-      z: null,
-      slopePerWeek: null,
-      totalSessions: usable.length,
-      sessionsToBaseline: Math.max(0, MIN_BASELINE + MIN_RECENT - usable.length),
-    };
-  }
-
-  // Cada dia vira a media dos z dos dominios medidos naquele dia. A escala fica
-  // em desvios-padrao, entao reaproveitamos analyzeSeries multiplicando por 10
-  // e deslocando para 50: assim 50 = igual a base, e 1 desvio = 10 pontos.
   const composite: SeriesPoint[] = [];
   for (const p of points) {
     const zs: number[] = [];
@@ -239,6 +232,24 @@ export function analyzeOverall(points: DayPoint[]): TrendVerdict {
     if (zs.length > 0) {
       composite.push({ date: p.date, time: p.time, score: clamp(50 + mean(zs) * 10, 0, 100) });
     }
+  }
+  return composite;
+}
+
+export function analyzeOverall(points: DayPoint[]): TrendVerdict {
+  const composite = compositeSeries(points);
+
+  if (composite.length === 0) {
+    const usable = points.filter((p) => p.overall !== null);
+    return {
+      status: usable.length === 0 ? 'sem_dados' : 'formando_base',
+      baseline: null,
+      recent: null,
+      z: null,
+      slopePerWeek: null,
+      totalSessions: usable.length,
+      sessionsToBaseline: Math.max(0, MIN_BASELINE + MIN_RECENT - usable.length),
+    };
   }
 
   return analyzeSeries(composite);
@@ -287,30 +298,30 @@ export function buildInsights(
   if (overall.status === 'formando_base') {
     insights.push({
       level: 'neutro',
-      title: `Faltam ${overall.sessionsToBaseline} sessões para a primeira leitura`,
+      title: `Faltam ${plural(overall.sessionsToBaseline, 'sessão', 'sessões')} para a primeira leitura`,
       detail:
         'As primeiras sessões servem para aprender o jogo e formar a linha de base. Só depois disso comparar faz sentido.',
     });
   } else {
     const z = overall.z ?? 0;
-    const delta = Math.abs(z).toFixed(1);
+    const delta = num(Math.abs(z));
     if (overall.status === 'estavel') {
       insights.push({
         level: 'bom',
         title: 'Desempenho geral estável',
-        detail: `As últimas sessões ficam dentro da variação normal da linha de base (${delta} desvio-padrão de distância).`,
+        detail: `As últimas sessões ficam dentro da variação normal da linha de base (${delta} desvios-padrão de distância).`,
       });
     } else if (overall.status.startsWith('melhora')) {
       insights.push({
         level: 'bom',
         title: 'Desempenho geral acima da linha de base',
-        detail: `As últimas sessões estão ${delta} desvio-padrão acima do início. Parte disso costuma ser prática — o ganho tende a estabilizar.`,
+        detail: `As últimas sessões estão ${delta} desvios-padrão acima do início. Parte disso costuma ser prática — o ganho tende a estabilizar.`,
       });
     } else {
       insights.push({
         level: 'atencao',
         title: 'Desempenho geral abaixo da linha de base',
-        detail: `As últimas sessões estão ${delta} desvio-padrão abaixo do início. Isso é um dado para levar ao médico, não um diagnóstico.`,
+        detail: `As últimas sessões estão ${delta} desvios-padrão abaixo do início. Isso é um dado para levar ao médico, não um diagnóstico.`,
       });
     }
   }
@@ -326,7 +337,7 @@ export function buildInsights(
       title: `${domainName(domain)} ${STATUS_WORD[verdict.status]}`,
       detail:
         verdict.slopePerWeek !== null
-          ? `Tendência de ${verdict.slopePerWeek > 0 ? '+' : ''}${verdict.slopePerWeek.toFixed(1)} pontos por semana ao longo de ${verdict.totalSessions} sessões.`
+          ? `Tendência de ${verdict.slopePerWeek > 0 ? '+' : ''}${num(verdict.slopePerWeek)} pontos por semana ao longo de ${plural(verdict.totalSessions, 'sessão', 'sessões')}.`
           : `Mediana recente de ${Math.round(verdict.recent ?? 0)} contra ${Math.round(verdict.baseline?.center ?? 0)} na linha de base.`,
     });
   }
