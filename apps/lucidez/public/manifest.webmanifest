@@ -1,0 +1,12 @@
+{
+  "name": "Lucidez — treino cognitivo",
+  "short_name": "Lucidez",
+  "description": "Jogos curtos diários que acompanham a evolução da cognição.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f7f8fb",
+  "theme_color": "#f7f8fb",
+  "icons": [{ "src": "./icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
+}

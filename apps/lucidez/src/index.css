@@ -1,0 +1,117 @@
+@import 'tailwindcss';
+
+/*
+ * Tema claro por padrao e de proposito. O publico-alvo inclui pessoas idosas
+ * ou com doenca neurologica, e texto claro sobre fundo escuro reduz a
+ * legibilidade de quem tem catarata ou baixa sensibilidade ao contraste.
+ * Em vez de modo escuro, oferecemos dois ajustes que ajudam de verdade:
+ * texto grande e alto contraste (ver data-attributes no <html>).
+ */
+@theme {
+  --color-bg: #f6f7fb;
+  --color-surface: #ffffff;
+  --color-surface-2: #eef1f8;
+  --color-ink: #14161f;
+  --color-muted: #565c72;
+  --color-line: #dbe0ec;
+
+  --color-brand: #2f5fe0;
+  --color-brand-soft: #e6ecfd;
+  --color-ok: #15803d;
+  --color-ok-soft: #e3f5e9;
+  --color-warn: #a35a06;
+  --color-warn-soft: #fdf0dc;
+  --color-bad: #b3261e;
+  --color-bad-soft: #fdeae8;
+
+  --font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Text', Inter, system-ui, sans-serif;
+}
+
+:root {
+  color-scheme: light;
+  --step: 1;
+}
+
+/* Texto grande: um multiplicador unico que as classes de tipo consultam. */
+html[data-text='grande'] {
+  --step: 1.18;
+}
+html[data-text='enorme'] {
+  --step: 1.36;
+}
+
+html[data-contrast='alto'] {
+  --color-bg: #ffffff;
+  --color-surface: #ffffff;
+  --color-surface-2: #ffffff;
+  --color-ink: #000000;
+  --color-muted: #26292f;
+  --color-line: #000000;
+  --color-brand: #10329c;
+  --color-brand-soft: #ffffff;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--color-bg);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  font-size: calc(17px * var(--step));
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+  /* Um teste de tempo de reacao nao pode sofrer com o bounce do Safari nem
+     com selecao de texto acidental durante os toques rapidos. */
+  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+input,
+select,
+textarea {
+  font-size: max(16px, calc(16px * var(--step)));
+}
+
+/* Alvos de toque nunca abaixo de 48px: maos com tremor erram alvos pequenos,
+   e o erro viraria "piora cognitiva" no grafico. */
+button,
+[role='button'] {
+  min-height: 48px;
+  touch-action: manipulation;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+@utility card {
+  border-radius: 1rem;
+  border: 1px solid var(--color-line);
+  background: var(--color-surface);
+  padding: 1rem;
+}
+
+@utility btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: 52px;
+  padding: 0 1.25rem;
+  border-radius: 0.85rem;
+  font-weight: 650;
+  font-size: calc(16px * var(--step));
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: transform 0.08s ease, background-color 0.15s ease;
+}
